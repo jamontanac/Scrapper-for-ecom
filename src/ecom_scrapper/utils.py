@@ -29,24 +29,34 @@ def get_updated_proxy_list(country_codes: List[str]) -> None:
     response = requests.get(url, timeout=3)
     response.raise_for_status()
 
-    # create the jq filter
-    countries_json = json.dumps(country_codes)
-    jq_filter = """
-            [.[] | select(
-                (.country_code as $cc | $countries | index($cc)) 
-            )]
-            """.strip()
-
     try:
-        result = subprocess.run(
-            ["jq", "--argjson", "countries", countries_json, jq_filter],
-            input=response.text,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        # Check if country_codes is None or empty
+        if country_codes is None or len(country_codes) == 0:
+            result = subprocess.run(
+                ["jq", "[.[]]"],
+                input=response.text,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        else:
+            # Filter by specified country codes
+            countries_json = json.dumps(country_codes)
+            jq_filter = """
+                    [.[] | select(
+                        (.country_code as $cc | $countries | index($cc)) 
+                    )]
+                    """.strip()
+            
+            result = subprocess.run(
+                ["jq", "--argjson", "countries", countries_json, jq_filter],
+                input=response.text,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
         with open(proxy_path, "w", encoding="utf-8") as f:
-            f.write(result.stdout)
+           f.write(result.stdout)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"jq error: {e.stderr}") from e
 
