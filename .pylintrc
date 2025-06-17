@@ -1,0 +1,81 @@
+[FORMAT]
+max-line-length = 120
+
+[MASTER]
+ignore-paths = notebooks
+ignore-patterns = ^\w+/*__init__.py
+
+[MESSAGES CONTROL]
+disable=
+    fixme,
+    missing-module-docstring,
+    too-few-public-methods,
+    too-many-statements,
+    too-many-locals,
+    duplicate-code,
+    logging-fstring-interpolation,
+    no-member,
+    protected-access,
+    unnecessary-comprehension,
+    logging-not-lazy
+
+[DESIGN]
+# Maximum number of arguments for function / method.
+max-args=15
+
+# Maximum number of attributes for a class (see R0902).
+max-attributes=15
+
+# Maximum number of boolean expressions in an if statement.
+max-bool-expr=5
+
+# Maximum number of branch for function / method body.
+max-branches=12
+
+# Maximum number of locals for function / method body.
+max-locals=30
+
+# Maximum number of parents for a class (see R0901).
+max-parents=7
+
+# Maximum number of public methods for a class (see R0904).
+max-public-methods=20
+
+# Maximum number of return / yield for function / method body.
+max-returns=6
+
+# Maximum number of statements in function / method body.
+max-statements=50
+
+# Minimum number of public methods for a class (see R0903).
+min-public-methods=1
+
+# Set max lines in module
+max-module-lines=1500
+
+#set positional arguments
+max-positional-arguments=10
+
+[BASIC]
+
+# Naming style matching correct constant names.
+const-naming-style=UPPER_CASE
+
+[LOGGING]
+
+# Format style used to check logging format string. `old` means using %
+# formatting, while `new` is for `{}` formatting.
+logging-format-style=new
+
+# Logging modules to check that the string format arguments are in logging
+# function parameter format.
+logging-modules=logging
+
+[VARIABLES]
+
+# Tells whether we should check for unused import in __init__ files.
+init-import=no
+
+# List of additional names supposed to be defined in builtins. Remember that
+# you should avoid defining new builtins when possible.
+additional-builtins=sc,display,dbutils

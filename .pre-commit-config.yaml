@@ -1,0 +1,64 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.11.4
+    hooks:
+      # Run the linter.
+      - id: ruff
+        types_or: [python, pyi]
+        args: [--fix]
+  - repo: local
+    hooks:
+      - id: black
+        name: Black
+        entry: poetry run black
+        types: [python]
+        exclude: ^notebooks/
+        language: system
+      - id: flake8
+        name: Flake8
+        entry: poetry run flake8
+        types: [python]
+        exclude: notebooks
+        language: system
+      - id: isort
+        name: Isort
+        entry: poetry run isort
+        types: [python]
+        language: system
+        exclude: ^notebooks/
+      - id: pydocstyle
+        name: Pydocstyle
+        entry: poetry run pydocstyle
+        types: [python]
+        language: system
+        exclude: notebooks
+  - repo: https://github.com/pycqa/pylint
+    rev: v3.0.3
+    hooks:
+      - id: pylint
+        name: pylint
+        entry: pylint
+        language: system
+        types: [python]
+        args: [
+            "-rn", # Only display messages
+            "-sn", # Don't display the score
+            "--rcfile=.pylintrc", # Link to the pylint config file
+          ]
+  - repo: https://github.com/python-poetry/poetry
+    rev: "1.4.2"
+    hooks:
+      - id: poetry-check
+      - id: poetry-export
+        args: ["-f", "requirements.txt"]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: "v4.4.0"
+    hooks:
+      - id: check-ast
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-yaml
+        exclude: tests/data
