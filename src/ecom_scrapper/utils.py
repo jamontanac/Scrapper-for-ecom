@@ -34,10 +34,6 @@ def get_updated_proxy_list(country_codes: List[str]) -> None:
     jq_filter = """
             [.[] | select(
                 (.country_code as $cc | $countries | index($cc)) 
-                and 
-                (.socks4 == "0") 
-                and 
-                (.socks5 == "0")
             )]
             """.strip()
 
