@@ -203,3 +203,5 @@ cython_debug/
 logs/
 *.log
 *.pid
+
+pyrightconfig.json
