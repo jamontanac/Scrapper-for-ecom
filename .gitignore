@@ -205,3 +205,4 @@ logs/
 *.pid
 
 pyrightconfig.json
+data/proxies/*
