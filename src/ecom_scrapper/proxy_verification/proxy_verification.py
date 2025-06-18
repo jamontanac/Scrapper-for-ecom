@@ -6,12 +6,7 @@ from typing import Dict, List, Union
 
 import requests
 
-from ecom_scrapper.utils import (
-    get_logger,
-    get_project_root,
-    get_updated_proxy_dict,
-    get_updated_proxy_list,
-)
+from ecom_scrapper.utils import get_logger, get_project_root, get_updated_proxy_dict, get_updated_proxy_list
 
 logger = get_logger(__name__)
 
@@ -51,7 +46,6 @@ def get_filtrated_proxy_list(
             q.put(proxy.strip())
 
     valid_proxies = check_proxies_parallel_executor(q, max_workers=excecutors)
-    print(f"Found {len(valid_proxies)} valid proxies.")
     if save_file:
         if isinstance(valid_proxies[0], str):
             new_proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "valid_proxieshttp.txt")
@@ -117,5 +111,6 @@ def check_single_proxy(proxy_info: Union[Dict[str, str], str]):
         if response.status_code == 200:
             return proxy_info
     except requests.RequestException:
+        # print(f"Proxy {proxy} is not valid.")
         logger.info(f"Proxy {proxy} is not valid.")
     return None
