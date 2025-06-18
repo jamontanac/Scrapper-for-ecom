@@ -10,7 +10,21 @@ import requests
 import yaml
 
 
-def get_updated_proxy_list(country_codes: List[str]) -> None:
+def get_updated_proxy_list() -> None:
+    url = "https://vakhov.github.io/fresh-proxy-list/http.txt"
+
+    proxy_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "proxylisthttp.txt")
+    proxy_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # make request to get the updated file
+    response = requests.get(url, timeout=3)
+    response.raise_for_status()
+
+    with open(proxy_path, "w", encoding="utf-8") as f:
+        f.write(response.text)
+
+
+def get_updated_proxy_dict(country_codes: List[str]) -> None:
     """Retrieves the updated proxy_list.
 
     this function is based on the repo of
@@ -47,7 +61,7 @@ def get_updated_proxy_list(country_codes: List[str]) -> None:
                         (.country_code as $cc | $countries | index($cc)) 
                     )]
                     """.strip()
-            
+
             result = subprocess.run(
                 ["jq", "--argjson", "countries", countries_json, jq_filter],
                 input=response.text,
@@ -56,7 +70,7 @@ def get_updated_proxy_list(country_codes: List[str]) -> None:
                 check=True,
             )
         with open(proxy_path, "w", encoding="utf-8") as f:
-           f.write(result.stdout)
+            f.write(result.stdout)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"jq error: {e.stderr}") from e
 

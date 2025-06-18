@@ -1,1 +1,107 @@
+import json
+import pathlib
+import queue
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Union
+
 import requests
+
+from ecom_scrapper.utils import get_logger, get_project_root, get_updated_proxy_dict, get_updated_proxy_list
+
+logger = get_logger(__name__)
+
+
+def get_filtrated_proxy_list(
+    countries: List[str] | None = None, excecutors: int = 4, save_file=False
+) -> Union[List[Dict[str, str]], List[str]]:
+    """Get a filtered list of proxies based on the provided countries.
+
+    Args:
+        countries (list[str]): List of country codes to filter proxies by. Defualt  None
+        excecutors (int): Number of threads to use for checking proxies.
+        save_file (bool) Default False: Whether to save the valid proxies to a file.
+
+    Returns:
+        list[dict[str, str]]: A list of dictionaries containing valid proxy information.
+    """
+    if isinstance(countries, List):
+        get_updated_proxy_dict(country_codes=countries)
+        proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "proxylist.json")
+        # Load the proxy list from the JSON file
+        with open(proxy_file_path, "r") as file:
+            proxies = json.load(file)
+    else:
+        get_updated_proxy_list()
+        proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "proxylisthttp.txt")
+        with open(proxy_file_path, "r") as f:
+            proxies = f.readlines()
+
+    # Generate the queue to validate each element
+    q = queue.Queue()
+    for proxy in proxies:
+        if isinstance(proxy, dict):
+            q.put(proxy)
+        else:
+            q.put(proxy.strip())
+
+    valid_proxies = check_proxies_parallel_executor(q, max_workers=excecutors)
+    print(f"Found {len(valid_proxies)} valid proxies.")
+    if save_file:
+        if isinstance(valid_proxies[0], str):
+            new_proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "valid_proxieshttp.txt")
+            with open(new_proxy_file_path, "w") as f:
+                f.write("\n".join(valid_proxies))
+        else:
+            new_proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "valid_proxies.json")
+            with open(new_proxy_file_path, "w") as f:
+                json.dump(valid_proxies, f, indent=4)
+        logger.info(f"Valid proxies saved to {new_proxy_file_path}")
+    return valid_proxies
+
+
+def check_proxies_parallel_executor(proxy_queue: queue.Queue, max_workers: int = 4):
+    """Check proxies in parallel using ThreadPoolExecutor.
+
+    Args:
+        proxy_queue (queue.Queue): Queue containing proxy information
+        max_workers (int): Maximum number of worker threads
+
+    Returns:
+        List[str]: List of valid proxy URLs
+    """
+    # Convert queue to list for ThreadPoolExecutor
+    proxy_list = []
+    while not proxy_queue.empty():
+        proxy_list.append(proxy_queue.get())
+
+    valid_proxies = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_proxy = {executor.submit(check_single_proxy, proxy_info): proxy_info for proxy_info in proxy_list}
+
+        # Collect results as they complete
+        for future in as_completed(future_to_proxy):
+            result = future.result()
+            if result:
+                valid_proxies.append(result)
+
+    return valid_proxies
+
+
+def check_single_proxy(proxy_info: Union[Dict[str, str], str]):
+    # proxy = f"{proxy_info['ip']}:{proxy_info['port']}"
+    if isinstance(proxy_info, dict):
+        proxy = f"{proxy_info['ip']}:{proxy_info['port']}"
+        # proxy = proxy_info["ip"]
+    else:
+        proxy = proxy_info
+    proxies = {"http": proxy}
+    test_url = "http://ipinfo.io/json"  # Use HTTP, not HTTPS
+    try:
+        response = requests.get(test_url, proxies=proxies, timeout=5)
+        if response.status_code == 200:
+            return proxy_info
+    except requests.RequestException:
+        logger.info(f"Proxy {proxy} is not valid.")
+    return None
