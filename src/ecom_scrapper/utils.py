@@ -11,6 +11,7 @@ import yaml
 
 
 def get_updated_proxy_list() -> None:
+    """Retrieves the updated proxy_list."""
     url = "https://vakhov.github.io/fresh-proxy-list/http.txt"
 
     proxy_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "proxylisthttp.txt")
@@ -31,8 +32,8 @@ def get_updated_proxy_dict(country_codes: List[str]) -> None:
     https://github.com/vakhov/fresh-proxy-list/tree/master
 
     Args:
-        contry_code: str, The code of certain country
-
+        country_codes: List[str], a list of country codes to filter the proxies by
+            if None or empty, all proxies will be returned
     """
     url = os.getenv("PROXY_URL", "https://vakhov.github.io/fresh-proxy-list/proxylist.json")
 

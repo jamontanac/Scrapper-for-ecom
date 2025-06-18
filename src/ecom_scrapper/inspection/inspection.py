@@ -27,7 +27,8 @@ def get_filtrated_proxy_list(
         save_file (bool) Default False: Whether to save the valid proxies to a file.
 
     Returns:
-        list[dict[str, str]]: A list of dictionaries containing valid proxy information.
+        Union[List[Dict[str, str]], List[str]]: List of valid proxies, either as
+        dictionaries with 'ip' and 'port' keys or as strings in the format 'ip:port'.
     """
     if isinstance(countries, List):
         get_updated_proxy_dict(country_codes=countries)
@@ -95,14 +96,22 @@ def check_proxies_parallel_executor(proxy_queue: queue.Queue, max_workers: int =
 
 
 def check_single_proxy(proxy_info: Union[Dict[str, str], str]):
-    # proxy = f"{proxy_info['ip']}:{proxy_info['port']}"
+    """Check if a single proxy is valid by making a request to a test URL.
+
+    Args:
+        proxy_info (Union[Dict[str, str], str]): Proxy information, either as a
+        dictionary with 'ip' and 'port' keys or as a string in the format 'ip:port'.
+
+    Returns:
+        Union[Dict[str, str], str, None]: Returns the proxy information if valid,
+        otherwise returns None.
+    """
     if isinstance(proxy_info, dict):
         proxy = f"{proxy_info['ip']}:{proxy_info['port']}"
-        # proxy = proxy_info["ip"]
     else:
         proxy = proxy_info
     proxies = {"http": proxy}
-    test_url = "http://ipinfo.io/json"  # Use HTTP, not HTTPS
+    test_url = "http://ipinfo.io/json"
     try:
         response = requests.get(test_url, proxies=proxies, timeout=5)
         if response.status_code == 200:
