@@ -58,7 +58,7 @@ def get_updated_proxy_dict(country_codes: List[str]) -> None:
             countries_json = json.dumps(country_codes)
             jq_filter = """
                     [.[] | select(
-                        (.country_code as $cc | $countries | index($cc)) 
+                        (.country_code as $cc | $countries | index($cc))
                     )]
                     """.strip()
 

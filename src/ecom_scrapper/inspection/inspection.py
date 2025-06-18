@@ -6,7 +6,12 @@ from typing import Dict, List, Union
 
 import requests
 
-from ecom_scrapper.utils import get_logger, get_project_root, get_updated_proxy_dict, get_updated_proxy_list
+from ecom_scrapper.utils import (
+    get_logger,
+    get_project_root,
+    get_updated_proxy_dict,
+    get_updated_proxy_list,
+)
 
 logger = get_logger(__name__)
 
@@ -28,12 +33,12 @@ def get_filtrated_proxy_list(
         get_updated_proxy_dict(country_codes=countries)
         proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "proxylist.json")
         # Load the proxy list from the JSON file
-        with open(proxy_file_path, "r") as file:
+        with open(proxy_file_path, "r", encoding="utf-8") as file:
             proxies = json.load(file)
     else:
         get_updated_proxy_list()
         proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "proxylisthttp.txt")
-        with open(proxy_file_path, "r") as f:
+        with open(proxy_file_path, "r", encoding="utf-8") as f:
             proxies = f.readlines()
 
     # Generate the queue to validate each element
@@ -49,11 +54,11 @@ def get_filtrated_proxy_list(
     if save_file:
         if isinstance(valid_proxies[0], str):
             new_proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "valid_proxieshttp.txt")
-            with open(new_proxy_file_path, "w") as f:
+            with open(new_proxy_file_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(valid_proxies))
         else:
             new_proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "valid_proxies.json")
-            with open(new_proxy_file_path, "w") as f:
+            with open(new_proxy_file_path, "w", encoding="utf-8") as f:
                 json.dump(valid_proxies, f, indent=4)
         logger.info(f"Valid proxies saved to {new_proxy_file_path}")
     return valid_proxies
