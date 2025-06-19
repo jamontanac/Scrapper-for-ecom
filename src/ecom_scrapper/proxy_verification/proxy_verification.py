@@ -1,3 +1,4 @@
+import argparse
 import json
 import pathlib
 import queue
@@ -114,3 +115,11 @@ def check_single_proxy(proxy_info: Union[Dict[str, str], str]):
         # print(f"Proxy {proxy} is not valid.")
         logger.info(f"Proxy {proxy} is not valid.")
     return None
+
+
+if __name__ == "__main__":
+    argparser = argparse.ArgumentParser(description="Proxy Verification Script")
+    argparser.add_argument("--countries", dest="countries", action="add", nargs="*", type=str, default=None)
+    args = argparser.parse_args()
+    logger.info(f"Starting proxy verification with countries: {args.countries}")
+    get_filtrated_proxy_list(countries=args.countries, excecutors=4, save_file=True)
