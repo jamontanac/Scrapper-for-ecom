@@ -1,0 +1,13 @@
+"system_name": "SmartScraper_LangGraph_System"
+"description": "Sistema inteligente para análisis de estructura web y extracción de reglas de scraping"
+custom_settings:
+  DOWNLOADER_MIDDLEWARES:
+    "rotating_proxies.middlewares.RotatingProxyMiddleware": 610
+    "rotating_proxies.middlewares.BanDetectionMiddleware": 620
+  RANDOMIZE_DOWNLOAD_DELAY: 0.5
+  # ROTATING_PROXY_LIST_PATH: data/proxies/valid_proxieshttp.txt
+  CONCURRENT_REQUESTS: 2
+  CONCURRENT_REQUESTS_PER_DOMAIN: 1
+  AUTOTHROTTLE_ENABLED: true
+  AUTOTHROTTLE_START_DELAY: 1
+  AUTOTHROTTLE_MAX_DELAY: 60

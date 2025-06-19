@@ -7,7 +7,12 @@ from typing import Dict, List, Union
 
 import requests
 
-from ecom_scrapper.utils import get_logger, get_project_root, get_updated_proxy_dict, get_updated_proxy_list
+from ecom_scrapper.utils import (
+    get_logger,
+    get_project_root,
+    get_updated_proxy_dict,
+    get_updated_proxy_list,
+)
 
 logger = get_logger(__name__)
 

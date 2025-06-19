@@ -130,7 +130,7 @@ def get_project_root():
     return current_path.as_posix()
 
 
-def read_yaml_file(file):
+def read_yaml_file(file) -> dict:
     """Read a yaml file and return the content as a dictionary.
 
     Args:
@@ -142,6 +142,6 @@ def read_yaml_file(file):
         with open(file, "r", encoding="utf-8") as stream:
             return yaml.safe_load(stream)
     except FileNotFoundError:
-        return None
+        return {}
     except yaml.YAMLError:
-        return None
+        return {}
