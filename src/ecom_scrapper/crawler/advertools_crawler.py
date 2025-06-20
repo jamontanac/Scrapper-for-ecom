@@ -76,39 +76,29 @@ class SmartCrawler:
         timestamp = int(time.time())
         output_file = self.output_dir / f"crawl_results_{timestamp}.jl"
         realistic_user_agents = self.config.get("realistic_user_agents")
-        custom_settings = {
-            **self.config["custom_settings"],
-            "USER_AGENT": random.choice(realistic_user_agents) if realistic_user_agents else None,
-            "MAX_PAGES": max_pages,
-            "DOWNLOAD_DELAY": random.uniform(5, 10),  # Random delay for requests,
-        }
+        base_config = self.config["custom_settings"]
+        base_config["USER_AGENT"] = random.choice(realistic_user_agents) if realistic_user_agents else None
+        base_config["MAX_PAGES"] = max_pages
+        base_config["DOWNLOAD_DELAY"] = random.uniform(5, 10)  # Random delay for requests
+
         # read config
         if self.use_proxy:
-            custom_settings = {
-                **self.config["custom_settings"],
-                "ROTATING_PROXY_LIST_PATH": self.proxies_file,
-                "DOWNLOADER_MIDDLEWARES": {
-                    "rotating_proxies.middlewares.RotatingProxyMiddleware": 610,
-                    "rotating_proxies.middlewares.BanDetectionMiddleware": 620,
-                },
-            }
+            proxy_config = self.config["proxy_settings"]
+            proxy_config["ROTATING_PROXY_LIST_PATH"] = self.proxies_file
+            base_config.update(proxy_config)
 
         if include_patterns:
-            custom_settings["include_url_regex"] = "|".join(include_patterns)
+            base_config["include_url_regex"] = "|".join(include_patterns)
         if exclude_patterns:
-            custom_settings["exclude_url_regex"] = "|".join(exclude_patterns)
+            base_config["exclude_url_regex"] = "|".join(exclude_patterns)
 
-        try:
             # start the crawl
-            self.logger.info(f"Starting crawl on {url} with max pages {max_pages}")
+        self.logger.info(f"Starting crawl on {url} with max pages {max_pages}")
 
-            adv.crawl(url_list=url, output_file=str(output_file), follow_links=True, custom_settings=custom_settings)
+        adv.crawl(url_list=url, output_file=str(output_file), follow_links=True, custom_settings=base_config)
 
-            self.logger.info(f"Crawl completed. Results saved to {output_file}")
-            return str(output_file)
-        except Exception as e:  # pylint:disable=broad-exception-caught
-            self.logger.error(f"Error during crawl: {e}")
-            raise
+        self.logger.info(f"Crawl completed. Results saved to {output_file}")
+        return str(output_file)
 
     def analyze_robots_txt_with_headers(self, url: str) -> Dict[str, Any]:
         """Analyzes the robots.txt file with custom anti-detection headers."""
@@ -192,39 +182,6 @@ class SmartCrawler:
 
         return analysis
 
-    # def analyze_robots_txt(self, url: str) -> Dict[str, Any]:
-    #     """Analyzes the robots.txt file of the given URL.
-    #
-    #     Args:
-    #         url: str, the URL to analyze
-    #
-    #     Returns:
-    #         output_file: str, path to the file with the robots.txt analysis results
-    #     """
-    #     # Generate an unique name to the output file
-    #     timestamp = int(time.time())
-    #     output_file = self.output_dir / f"robots_analysis_{timestamp}.jl"
-    #     url = url.rstrip("/") + "/robots.txt"
-    #     try:
-    #         self.logger.info(f"Analyzing robots.txt for {url}")
-    #         robots_df = adv.robotstxt_to_df(robotstxt_url=url, output_file=str(output_file))
-    #         if robots_df is None:
-    #             return {}
-    #         analysis = {
-    #             "total_rules": len(robots_df),
-    #             "users_agents": robots_df["user_agent"].unique().tolist(),
-    #             "dissallowd_paths": robots_df[robots_df["directive"] == "Disallowed"]["content"].tolist(),
-    #             "allowed_paths": robots_df[robots_df["directive"] == "Allowed"]["content"].tolist(),
-    #             "sitemaps": robots_df[robots_df["directive"] == "Sitemap"]["content"].tolist(),
-    #             "crawl_delay": robots_df[robots_df["directive"] == "Crawl-delay"]["content"].tolist(),
-    #         }
-    #         self.logger.info("Robots.txt analisis completed successfully.")
-    #         return analysis
-    #
-    #     except Exception as e:  # pylint:disable=broad-exception-caught
-    #         self.logger.error(f"Error during robots.txt analysis: {e}")
-    #         raise
-    #
     def analyze_sitemap(self, url: str, save_output: bool = True) -> Dict[str, Any]:
         """Analyzes the sitemap of the given URL.
 
@@ -367,6 +324,9 @@ if __name__ == "__main__":
     crawler = SmartCrawler(
         use_proxy=USE_PROXY, proxies_file=args.proxies_file, output_dir=args.output_dir, config_path=args.config_path
     )
-    result = crawler.analyze_robots_txt_with_headers(args.url)
+    # result = crawler.analyze_robots_txt_with_headers(args.url)
     # result = crawler.analyze_sitemap(url=args.url)
+    result = crawler.crawl_with_analysis(
+        url=args.url,
+    )
     print(result)
