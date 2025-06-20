@@ -121,7 +121,7 @@ class SmartCrawler:
         realistic_user_agents = self.config.get("realistic_user_agents", [])
 
         headers = {
-            **self.config["custom_config"]["DEFAULT_REQUEST_HEADERS"],
+            **self.config["custom_settings"]["DEFAULT_REQUEST_HEADERS"],
             "User-Agent": random.choice(realistic_user_agents),
         }
 
@@ -238,7 +238,7 @@ class SmartCrawler:
         """
         realistic_user_agents = self.config.get("realistic_user_agents", [])
         headers = {
-            **self.config["custom_config"]["DEFAULT_REQUEST_HEADERS"],
+            **self.config["custom_settings"]["DEFAULT_REQUEST_HEADERS"],
             "User-Agent": random.choice(realistic_user_agents),
         }
 
