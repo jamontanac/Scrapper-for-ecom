@@ -52,6 +52,7 @@ def get_filtrated_proxy_list(
             q.put(proxy.strip())
 
     valid_proxies = check_proxies_parallel_executor(q, max_workers=excecutors)
+    logger.info(f"Found {len(valid_proxies)} valid proxies out of {len(proxies)} total proxies.")
     if save_file:
         if isinstance(valid_proxies[0], str):
             new_proxy_file_path = pathlib.Path(get_project_root()).joinpath("data", "proxies", "valid_proxieshttp.txt")
@@ -118,13 +119,16 @@ def check_single_proxy(proxy_info: Union[Dict[str, str], str]):
             return proxy_info
     except requests.RequestException:
         # print(f"Proxy {proxy} is not valid.")
-        logger.info(f"Proxy {proxy} is not valid.")
-    return None
+        # logger.info(f"Proxy {proxy} is not valid.")
+        return None
 
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Proxy Verification Script")
-    argparser.add_argument("--countries", dest="countries", action="add", nargs="*", type=str, default=None)
+    argparser.add_argument("--countries", dest="countries", nargs="+", type=str, default=None, required=False)
     args = argparser.parse_args()
-    logger.info(f"Starting proxy verification with countries: {args.countries}")
+    if args.countries is not None:
+        logger.info(f"Starting proxy verification with countries: {args.countries}")
+    else:
+        logger.info("Starting proxy verification without country filtering.")
     get_filtrated_proxy_list(countries=args.countries, excecutors=4, save_file=True)
