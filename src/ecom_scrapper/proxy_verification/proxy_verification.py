@@ -117,6 +117,7 @@ def check_single_proxy(proxy_info: Union[Dict[str, str], str]):
         response = requests.get(test_url, proxies=proxies, timeout=5)
         if response.status_code == 200:
             return proxy_info
+        return None
     except requests.RequestException:
         # print(f"Proxy {proxy} is not valid.")
         # logger.info(f"Proxy {proxy} is not valid.")
