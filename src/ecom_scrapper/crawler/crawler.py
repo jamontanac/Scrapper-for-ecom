@@ -2,33 +2,32 @@ import argparse
 import os
 import random
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 from urllib.robotparser import RobotFileParser
 
-import advertools as adv
+# import advertools as adv
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-from ecom_scrapper.utils import get_logger, read_yaml_file
+from ecom_scrapper.utils import get_logger, get_project_root, read_yaml_file
 
 
 class SimpleCrawler:
     """Intelligent Crawler that uses advertools with proxies."""
 
-    def __init__(
-        self, output_dir: str, config_path: str, use_proxy: bool = False, proxies_file: Optional[str] = None
-    ) -> None:
+    def __init__(self, output_dir: str, use_proxy: bool = False, proxies_file: Optional[str] = None) -> None:
         """Starts a crawler with the proxy config.
 
         Args:
             proxies_file: str, path to the file containing the proxies
             output_dir: str, path to the directory where the output will be saved
-            config_path: str, path to the configuration file
             use_proxy: bool, whether to use proxies or not
         """
+        config_path = Path(get_project_root()).joinpath("config", "system_config.yaml")
         self.config = read_yaml_file(config_path)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
@@ -40,6 +39,33 @@ class SimpleCrawler:
             self.proxies_file = proxies_file
             # validate the proxies file
             self._validate_proxies_file()
+
+    def _create_random_name(self):
+        animals = [
+            "perro",
+            "gato",
+            "pajaro",
+            "pez",
+            "conejo",
+            "tortuga",
+            "caballo",
+            "vaca",
+            "oveja",
+            "cerdo",
+            "leon",
+            "tigre",
+            "elefante",
+            "jirafa",
+            "mono",
+            "zorro",
+            "lobo",
+            "oso",
+            "serpiente",
+            "aguila",
+        ]
+        animal = random.choice(animals)
+        date_str = datetime.now().strftime("%Y%m%d-%H%M")
+        return f"Crawl-{animal}-{date_str}"
 
     def _validate_proxies_file(self) -> None:
         """Validates the proxies file."""
@@ -58,77 +84,37 @@ class SimpleCrawler:
         self.logger.info(f"Loaded {len(self.proxies)} proxies from {self.proxies_file}")
 
     def crawl_pages(self, urls: List[str], max_pages: int = 50) -> str:
+        """Crawls the given URLs and saves the results to a file."""
         timestamp = int(time.time())
         output_file = self.output_dir / f"crawl_iter_{timestamp}.txt"
         rp = self._get_robot_parser(urls[0])
+
+        dummy_user_agent = random.choice(self.config.get("realistic_user_agents", []))
         visited, count = set(), 0
-        headers = self.config["custom_settings"]["DEFAULT_REQUEST_HEADERS"]
         with open(output_file, "w", encoding="utf-8") as f:
             for url in urls:
                 if count >= max_pages:
                     break
-                ua = random.choice(self.config["realistic_user_agents"])
-                headers["User-Agent"] = ua
-                proxy_to_use = random.choice(self.proxies) if self.use_proxy else None
-                proxies = {"http": proxy_to_use} if proxy_to_use else None
-                if not rp.can_fetch(ua, url):
+                if not rp.can_fetch(dummy_user_agent, url):
+                    f.write(f"{url} --> forbidden by robotstxt for {dummy_user_agent}")
                     continue
-                try:
-                    resp = requests.get(url, headers=headers, proxies=proxies, timeout=10)
-                    resp.raise_for_status()
+                response, error = self.make_realistic_request(url)
+                if response:
                     count += 1
                     if url not in visited:
                         visited.add(url)
-                        f.write(f"{url}, {resp.status_code}\n")
-                except Exception as e:  # pylint:disable=broad-exception-caught
-                    f.write(f"{url} -> ERROR: {e}\n")
-        return str(output_file)
+                        folder_file = self.output_dir / "crawl"
+                        folder_file.mkdir(exist_ok=True)
+                        file_name = folder_file / f"{self._create_random_name()}.html"
+                        f.write(f"{url} --> {response.status_code} --> {file_name}\n")
+                        with open(file_name, "w", encoding="utf-8") as html_file:
+                            html_file.write(response.text)
 
-    # def crawl_pages(
-    #     self,
-    #     url: str,
-    #     max_pages: int = 50,
-    #     include_patterns: Optional[List[str]] = None,
-    #     exclude_patterns: Optional[List[str]] = None,
-    # ) -> str:
-    #     """Performs a crawl on the given URL and analyzes the results.
-    #
-    #     Args:
-    #         url: str, the URL to crawl
-    #         max_pages: int, the maximum number of pages to crawl
-    #         include_patterns: Optional[List[str]], patterns to include in the crawl
-    #         exclude_patterns: Optional[List[str]], patterns to exclude from the crawl
-    #
-    #     Returns:
-    #         output_file: str, path to the file with the results
-    #     """
-    #     # Generate an unique name to the output file
-    #     timestamp = int(time.time())
-    #     output_file = self.output_dir / f"crawl_results_{timestamp}.jl"
-    #     realistic_user_agents = self.config.get("realistic_user_agents")
-    #     base_config = self.config["custom_settings"]
-    #     base_config["USER_AGENT"] = random.choice(realistic_user_agents) if realistic_user_agents else None
-    #     base_config["MAX_PAGES"] = max_pages
-    #     base_config["DOWNLOAD_DELAY"] = random.uniform(5, 10)  # Random delay for requests
-    #
-    #     # read config
-    #     if self.use_proxy:
-    #         proxy_config = self.config["proxy_settings"]
-    #         proxy_config["ROTATING_PROXY_LIST_PATH"] = self.proxies_file
-    #         base_config.update(proxy_config)
-    #
-    #     if include_patterns:
-    #         base_config["include_url_regex"] = "|".join(include_patterns)
-    #     if exclude_patterns:
-    #         base_config["exclude_url_regex"] = "|".join(exclude_patterns)
-    #
-    #         # start the crawl
-    #     self.logger.info(f"Starting crawl on {url} with max pages {max_pages}")
-    #
-    #     # adv.crawl(url_list=url, output_file=str(output_file), follow_links=True, custom_settings=base_config)
-    #
-    #     self.logger.info(f"Crawl completed. Results saved to {output_file}")
-    #     return str(output_file)
+                elif error != "":
+                    f.write(f"{url} -> ERROR: {error} --> \n")
+                else:
+                    f.write(f"{url} --> Unreachable --> \n")
+        return str(output_file)
 
     def _get_robot_parser(self, base_url: str) -> RobotFileParser:
         """Parse the robots.txt file for the given base URL."""
@@ -176,14 +162,32 @@ class SimpleCrawler:
             self.logger.error(f"Error during robots.txt analysis: {e}")
             raise
 
-    def _get_sitemap_urls(self, sitemap_url: str) -> List[str]:
+    def _get_sitemap_urls(self, url: str, request: bool = False, path_site: Optional[str] = None) -> List[str]:
         """Get the sitemap URLs from the given sitemap URL."""
-        proxy_to_use = random.choice(self.proxies) if self.use_proxy else None
-        proxies = {"http": proxy_to_use} if proxy_to_use else None
-        resp = requests.get(sitemap_url, proxies=proxies, timeout=10)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.content, "lxml")
-        return [loc.text.strip() for loc in soup.find_all("loc")]
+        if not request and path_site:
+            with open(path_site, "r", encoding="utf-8") as f:
+                sitemap_data = BeautifulSoup(f.read(), "lxml")
+            return [loc.text.strip() for loc in sitemap_data.find_all("loc")]
+
+        url = url.rstrip("/")  # Ensure URL ends with no trailing slash
+        sitemap_urls = [
+            f"{url}/sitemap.xml",
+            f"{url}/sitemap_index.xml",
+            f"{url}/sitemap/sitemap.xml",
+        ]
+
+        sitemap_data = None
+        for sitemap_url in sitemap_urls:
+            response, _ = self.make_realistic_request(sitemap_url)
+            if response:
+                sitemap_data = BeautifulSoup(response.content, "lxml")
+                break
+            else:
+                self.logger.info(f"Failed to fetch sitemap from {sitemap_url}, trying with other sitemap")
+
+        if sitemap_data is None:
+            return []
+        return [loc.text.strip() for loc in sitemap_data.find_all("loc")]
 
     def _parse_robots_content(self, content: str, robots_url: str) -> pd.DataFrame:
         """Processes the robots.txt content and converts it to DataFrame."""
@@ -228,125 +232,36 @@ class SimpleCrawler:
 
         return analysis
 
-    def analyze_sitemap(self, url: str, save_output: bool = True) -> Dict[str, Any]:
-        """Analyzes the sitemap of the given URL.
-
-        Args:
-            url: str, the URL to analyze the sitemap for
-
-        Returns:
-            Analysis results as a dictionary with the following keys:
-            total_urls, url_types, last_modified, priority_distribution,
-            change_frequency_distribution
-        """
+    def make_realistic_request(
+        self, url: str, max_retries: int = 3, trying: int = 0
+    ) -> Tuple[requests.Response | None, str]:
+        url = url.strip("/")
         realistic_user_agents = self.config.get("realistic_user_agents", [])
         headers = {
             **self.config["custom_settings"]["DEFAULT_REQUEST_HEADERS"],
             "User-Agent": random.choice(realistic_user_agents),
         }
-
+        proxy_to_use = random.choice(self.proxies) if self.use_proxy else None
+        proxies = {"http": proxy_to_use} if proxy_to_use else None
+        trying_number = trying + 1
+        response = None
         try:
-            # try to find it
-            url = url.rstrip("/")  # Ensure URL ends with no trailing slash
-            sitemap_urls = [
-                f"{url}/sitemap.xml",
-                f"{url}/sitemap_index.xml",
-                f"{url}/sitemap/sitemap.xml",
-            ]
+            response = requests.get(url, headers=headers, proxies=proxies, timeout=10)
+            response.raise_for_status()
+            self.logger.info(f"Successfully fetched {url} with status code {response.status_code}")
+        except requests.RequestException as e:
+            if "403" in str(e) or "Access Denied" in str(e):
+                self.logger.info("Access Denied, trying with a different User-agent")
+                if trying_number >= max_retries:
+                    self.logger.error(f"Failed to fetch {url} after {max_retries} attempts.")
+                    return None, str(e)
+                self.make_realistic_request(url, max_retries=max_retries, trying=trying_number)
+            else:
+                self.logger.error(f"Error fetching {url}: {e}")
+        finally:
+            time.sleep(random.uniform(1, 3))  # Sleep to avoid overwhelming the server
 
-            sitemap_data = None
-            for sitemap_url in sitemap_urls:
-                try:
-                    self.logger.info(f"Trying to fetch sitemap from {sitemap_url}")
-                    sitemap_data = adv.sitemap_to_df(sitemap_url=sitemap_url, request_headers=headers)
-                    time.sleep(random.uniform(1, 3))  # Sleep to avoid overwhelming the server
-                    if not sitemap_data.empty:
-                        self.logger.info(f"Sitemap found at {sitemap_url}")
-                        break
-                except Exception as e:  # pylint:disable=broad-exception-caught
-                    self.logger.warning(f"Failed to fetch sitemap from {sitemap_url}: {e}")
-                    # handle 403 code case
-
-                    if "403" in str(e) or "Access Denied" in str(e):
-                        self.logger.info("Access Denied, trying with differrent User-agent")
-                        headers["User-Agent"] = random.choice(realistic_user_agents)
-                    continue
-
-            if sitemap_data is None:
-                return {"Error": "sitemap not found"}
-            analysis = {
-                "total_urls": len(sitemap_data),
-                "url_types": (sitemap_data.get("loc", pd.Series()) or pd.Series())
-                .str.extract(r"\.(\w+)$")[0]
-                .value_counts()
-                .to_dict()
-                if "loc" in sitemap_data.columns
-                else {},
-                "last_modified": (sitemap_data.get("lastmod", pd.Series()) or pd.Series()).describe().to_dict()
-                if "lastmod" in sitemap_data.columns
-                else {},
-                "priority_distribution": (sitemap_data.get("priority", pd.Series()) or pd.Series()).describe().to_dict()
-                if "priority" in sitemap_data.columns
-                else {},
-                "change_frequency_distribution": (sitemap_data.get("changefreq", pd.Series()) or pd.Series())
-                .value_counts()
-                .to_dict()
-                if "changefreq" in sitemap_data.columns
-                else {},
-            }
-            self.logger.info("Sitemap analysis completed successfully.")
-            if save_output:
-                timestamp = int(time.time())
-                output_file = self.output_dir / f"sitemap_{timestamp}.xml"
-                sitemap_data.to_xml(str(output_file), index=False)
-            return analysis
-        except Exception as e:  # pylint:disable=broad-exception-caught
-            self.logger.warning(f"Could not analyze sitemap: {str(e)}")
-            return {"error": str(e)}
-
-    def load_crawl_data(self, crawl_file: str) -> pd.DataFrame:
-        """Loads crawl data from JSONL file.
-
-        Args:
-            crawl_file: Path to the crawl file
-
-        Returns:
-            DataFrame with the crawl data
-        """
-        try:
-            df = pd.read_json(crawl_file, lines=True)
-            self.logger.info(f"Crawl data loaded: {len(df)} pages")
-            return df
-        except Exception as e:  # pylint:disable=broad-exception-caught
-            self.logger.error(f"Error loading crawl data: {str(e)}")
-            raise
-
-    def get_crawl_summary(self, crawl_file: str) -> Dict[str, Any]:
-        """Generates a summary of the performed crawl.
-
-        Args:
-            crawl_file: Path to the crawl file
-
-        Returns:
-            Summary with crawl statistics
-        """
-        df = self.load_crawl_data(crawl_file)
-
-        summary = {
-            "total_pages": len(df),
-            "successful_requests": len(df[df["status"] == 200]),
-            "failed_requests": len(df[df["status"] != 200]),
-            "unique_domains": df["domain"].nunique() if "domain" in df.columns else 0,
-            "content_types": df["resp_headers_content-type"].value_counts().head().to_dict()
-            if "resp_headers_content-type" in df.columns
-            else {},
-            "status_codes": df["status"].value_counts().to_dict(),
-            "proxy_usage": df.filter(regex="proxy").columns.tolist(),
-            "avg_response_time": df["download_latency"].mean() if "download_latency" in df.columns else 0,
-            "total_size_mb": df["size"].sum() / (1024 * 1024) if "size" in df.columns else 0,
-        }
-
-        return summary
+        return response, ""
 
 
 if __name__ == "__main__":
@@ -366,11 +281,19 @@ if __name__ == "__main__":
     USE_PROXY = True
     if args.proxies_file is None:
         USE_PROXY = False
-
     crawler = SimpleCrawler(
-        use_proxy=USE_PROXY, proxies_file=args.proxies_file, output_dir=args.output_dir, config_path=args.config_path
+        use_proxy=USE_PROXY,
+        proxies_file=args.proxies_file,
+        output_dir=args.output_dir,
     )
-
+    response, error = crawler.make_realistic_request(args.url)
+    if response:
+        print(f"response is not none, status code: {response.status_code}")
+        print(response.text)
+    else:
+        print(error)
+    # URLS = crawler._get_sitemap_urls(args.url, path_site="data/results_scrapper/sitemap.xml")
+    # print(URLS)
     # result = crawler.analyze_robots_txt_with_headers(args.url)
     # result = crawler.analyze_sitemap(url=args.url)
     # result = crawler.crawl_pages(
