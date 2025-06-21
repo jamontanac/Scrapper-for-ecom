@@ -59,7 +59,6 @@ def create_structured_llm(llm_model: BaseChatModel, data_structure: Type[BaseMod
         structured_llm = create_structured_llm(base_llm, ResponseSchema)
         ```
     """
-
     return llm_model.with_structured_output(data_structure)
 
 
@@ -126,7 +125,6 @@ def format_and_send_messages(
 
 def run_navigation_agent(
     url: str,
-    config_crawler_path: str,
     output_dir: str,
     model: str = "gpt-4o",
     use_proxy: bool = False,
@@ -135,9 +133,11 @@ def run_navigation_agent(
     """Run the navigation agent with the provided resources and interests.
 
     Args:
-        resources (List[str]): List of resources to navigate.
-        interests (Optional[List[str]]): List of interests to consider.
+        url (str): The URL to navigate.
+        output_dir (str): Directory to save the results.
         model (str): The OpenAI model to use for the chat completion.
+        use_proxy (bool): Whether to use a proxy for requests.
+        proxy_file (Optional[str]): Path to the proxy file if using a proxy.
 
     Returns:
         str: The response from the OpenAI API.
@@ -165,7 +165,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     result = run_navigation_agent(
         url=args.url,
-        config_crawler_path=args.config_crawler_path,
         output_dir=args.output_dir,
         model=args.model,
         use_proxy=args.use_proxy,
