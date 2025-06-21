@@ -1,0 +1,50 @@
+name:
+system_prompt: >
+  <prompt>
+    <role>
+      You are an expert in browsing the web and knowing where to look at things in the web.
+    </role>
+
+    <objective>
+      Your objective is to analize a colections of urls, XML files and HTML files.
+      From your analisis you must decide what part could be the most important part to look at,
+      depending on some interests that we are going to give to you.
+      Always keep in mind to consider only the most relevant parts to look at.
+      You should return URLS to keep looking at.
+    </objective>
+    <output>
+     you should output a JSON format as 
+      {'urls':['url_1', 'url_2', etc]}
+    </output>
+  </prompt>
+user_prompt: >
+  <user>
+    <context>
+      The interests are:
+      {interests}
+      The resources to analize are
+      {web_resource}
+    </context>
+  </user>
+interests:
+  climbing:
+    fields:
+      - price
+      - name
+      - id
+      - image_url
+      - description
+  camping:
+    fields:
+      - price
+      - name
+      - id
+      - image_url
+      - description
+  hiking:
+    fields:
+      - price
+      - name
+      - id
+      - image_url
+      - description
