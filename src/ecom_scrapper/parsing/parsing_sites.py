@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 dotenv.load_dotenv()
 
 
-class navigation_agent_output(BaseModel):
+class NavigationAgent(BaseModel):
     """Class with the expected output."""
 
     urls: List[str] = Field(
@@ -113,7 +113,7 @@ def format_and_send_messages(
         create_generic_message(user_prompt, role="user", message_type="user"),
     ]
     # start the model
-    llm_structured = create_structured_llm(select_llm_model(model), navigation_agent_output)
+    llm_structured = create_structured_llm(select_llm_model(model), NavigationAgent)
 
     answer = llm_structured.invoke(messages_to_send)
     return answer
@@ -142,9 +142,7 @@ def run_navigation_agent(
     Returns:
         str: The response from the OpenAI API.
     """
-    crawler = SimpleCrawler(
-        output_dir=output_dir, config_path=config_crawler_path, proxies_file=proxy_file, use_proxy=use_proxy
-    )
+    crawler = SimpleCrawler(output_dir=output_dir, proxies_file=proxy_file, use_proxy=use_proxy)
     urls = crawler._get_sitemap_urls(url=url, path_site="data/results_scrapper/sitemap.xml")
     answer = format_and_send_messages(
         resources=urls,
@@ -167,7 +165,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     result = run_navigation_agent(
         url=args.url,
-        config_crawler_path=args.config_path,
+        config_crawler_path=args.config_crawler_path,
         output_dir=args.output_dir,
         model=args.model,
         use_proxy=args.use_proxy,

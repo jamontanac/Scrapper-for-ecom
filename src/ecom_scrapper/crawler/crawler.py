@@ -179,11 +179,9 @@ class SimpleCrawler:
         sitemap_data = None
         for sitemap_url in sitemap_urls:
             response, _ = self.make_realistic_request(sitemap_url)
-            if response:
-                sitemap_data = BeautifulSoup(response.content, "lxml")
-                break
-            else:
-                self.logger.info(f"Failed to fetch sitemap from {sitemap_url}, trying with other sitemap")
+            sitemap_data = BeautifulSoup(response.content, "lxml")
+            break
+            self.logger.info(f"Failed to fetch sitemap from {sitemap_url}, trying with other sitemap")
 
         if sitemap_data is None:
             return []
@@ -235,6 +233,16 @@ class SimpleCrawler:
     def make_realistic_request(
         self, url: str, max_retries: int = 3, trying: int = 0
     ) -> Tuple[requests.Response | None, str]:
+        """Performs a realistic HTTP request with anti-detection headers.
+
+        Args:
+            url (str): The URL to request.
+            max_retries (int): Maximum number of retries for the request.
+            trying (int): Current attempt number.
+
+        Returns:
+            Response or None: The HTTP response if successful, None otherwise.
+        """
         url = url.strip("/")
         realistic_user_agents = self.config.get("realistic_user_agents", [])
         headers = {
@@ -286,12 +294,12 @@ if __name__ == "__main__":
         proxies_file=args.proxies_file,
         output_dir=args.output_dir,
     )
-    response, error = crawler.make_realistic_request(args.url)
-    if response:
-        print(f"response is not none, status code: {response.status_code}")
-        print(response.text)
-    else:
-        print(error)
+    # response, error = crawler.make_realistic_request(args.url)
+    # if response:
+    #     print(f"response is not none, status code: {response.status_code}")
+    #     print(response.text)
+    # else:
+    #     print(error)
     # URLS = crawler._get_sitemap_urls(args.url, path_site="data/results_scrapper/sitemap.xml")
     # print(URLS)
     # result = crawler.analyze_robots_txt_with_headers(args.url)
