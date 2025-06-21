@@ -179,8 +179,9 @@ class SimpleCrawler:
         sitemap_data = None
         for sitemap_url in sitemap_urls:
             response, _ = self.make_realistic_request(sitemap_url)
-            sitemap_data = BeautifulSoup(response.content, "lxml")
-            break
+            if response:
+                sitemap_data = BeautifulSoup(response.content, "lxml")
+                break
             self.logger.info(f"Failed to fetch sitemap from {sitemap_url}, trying with other sitemap")
 
         if sitemap_data is None:
