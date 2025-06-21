@@ -132,4 +132,4 @@ if __name__ == "__main__":
         logger.info(f"Starting proxy verification with countries: {args.countries}")
     else:
         logger.info("Starting proxy verification without country filtering.")
-    get_filtrated_proxy_list(countries=args.countries, excecutors=4, save_file=True)
+    get_filtrated_proxy_list(countries=args.countries, excecutors=8, save_file=True)

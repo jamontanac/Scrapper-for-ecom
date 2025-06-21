@@ -4,15 +4,18 @@ import random
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin
+from urllib.robotparser import RobotFileParser
 
 import advertools as adv
 import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 
 from ecom_scrapper.utils import get_logger, read_yaml_file
 
 
-class SmartCrawler:
+class SimpleCrawler:
     """Intelligent Crawler that uses advertools with proxies."""
 
     def __init__(
@@ -51,54 +54,88 @@ class SmartCrawler:
         if not os.path.isfile(self.proxies_file):
             raise ValueError(f"Proxies file {self.proxies_file} is not a file.")
         with open(self.proxies_file, "r", encoding="utf-8") as f:
-            proxies = f.readlines()
-        self.logger.info(f"Loaded {len(proxies)} proxies from {self.proxies_file}")
+            self.proxies = f.readlines()
+        self.logger.info(f"Loaded {len(self.proxies)} proxies from {self.proxies_file}")
 
-    def crawl_with_analysis(
-        self,
-        url: str,
-        max_pages: int = 50,
-        include_patterns: Optional[List[str]] = None,
-        exclude_patterns: Optional[List[str]] = None,
-    ) -> str:
-        """Performs a crawl on the given URL and analyzes the results.
-
-        Args:
-            url: str, the URL to crawl
-            max_pages: int, the maximum number of pages to crawl
-            include_patterns: Optional[List[str]], patterns to include in the crawl
-            exclude_patterns: Optional[List[str]], patterns to exclude from the crawl
-
-        Returns:
-            output_file: str, path to the file with the results
-        """
-        # Generate an unique name to the output file
+    def crawl_pages(self, urls: List[str], max_pages: int = 50) -> str:
         timestamp = int(time.time())
-        output_file = self.output_dir / f"crawl_results_{timestamp}.jl"
-        realistic_user_agents = self.config.get("realistic_user_agents")
-        base_config = self.config["custom_settings"]
-        base_config["USER_AGENT"] = random.choice(realistic_user_agents) if realistic_user_agents else None
-        base_config["MAX_PAGES"] = max_pages
-        base_config["DOWNLOAD_DELAY"] = random.uniform(5, 10)  # Random delay for requests
-
-        # read config
-        if self.use_proxy:
-            proxy_config = self.config["proxy_settings"]
-            proxy_config["ROTATING_PROXY_LIST_PATH"] = self.proxies_file
-            base_config.update(proxy_config)
-
-        if include_patterns:
-            base_config["include_url_regex"] = "|".join(include_patterns)
-        if exclude_patterns:
-            base_config["exclude_url_regex"] = "|".join(exclude_patterns)
-
-            # start the crawl
-        self.logger.info(f"Starting crawl on {url} with max pages {max_pages}")
-
-        adv.crawl(url_list=url, output_file=str(output_file), follow_links=True, custom_settings=base_config)
-
-        self.logger.info(f"Crawl completed. Results saved to {output_file}")
+        output_file = self.output_dir / f"crawl_iter_{timestamp}.txt"
+        rp = self._get_robot_parser(urls[0])
+        visited, count = set(), 0
+        headers = self.config["custom_settings"]["DEFAULT_REQUEST_HEADERS"]
+        with open(output_file, "w", encoding="utf-8") as f:
+            for url in urls:
+                if count >= max_pages:
+                    break
+                ua = random.choice(self.config["realistic_user_agents"])
+                headers["User-Agent"] = ua
+                proxy_to_use = random.choice(self.proxies) if self.use_proxy else None
+                proxies = {"http": proxy_to_use} if proxy_to_use else None
+                if not rp.can_fetch(ua, url):
+                    continue
+                try:
+                    resp = requests.get(url, headers=headers, proxies=proxies, timeout=10)
+                    resp.raise_for_status()
+                    count += 1
+                    if url not in visited:
+                        visited.add(url)
+                        f.write(f"{url}, {resp.status_code}\n")
+                except Exception as e:  # pylint:disable=broad-exception-caught
+                    f.write(f"{url} -> ERROR: {e}\n")
         return str(output_file)
+
+    # def crawl_pages(
+    #     self,
+    #     url: str,
+    #     max_pages: int = 50,
+    #     include_patterns: Optional[List[str]] = None,
+    #     exclude_patterns: Optional[List[str]] = None,
+    # ) -> str:
+    #     """Performs a crawl on the given URL and analyzes the results.
+    #
+    #     Args:
+    #         url: str, the URL to crawl
+    #         max_pages: int, the maximum number of pages to crawl
+    #         include_patterns: Optional[List[str]], patterns to include in the crawl
+    #         exclude_patterns: Optional[List[str]], patterns to exclude from the crawl
+    #
+    #     Returns:
+    #         output_file: str, path to the file with the results
+    #     """
+    #     # Generate an unique name to the output file
+    #     timestamp = int(time.time())
+    #     output_file = self.output_dir / f"crawl_results_{timestamp}.jl"
+    #     realistic_user_agents = self.config.get("realistic_user_agents")
+    #     base_config = self.config["custom_settings"]
+    #     base_config["USER_AGENT"] = random.choice(realistic_user_agents) if realistic_user_agents else None
+    #     base_config["MAX_PAGES"] = max_pages
+    #     base_config["DOWNLOAD_DELAY"] = random.uniform(5, 10)  # Random delay for requests
+    #
+    #     # read config
+    #     if self.use_proxy:
+    #         proxy_config = self.config["proxy_settings"]
+    #         proxy_config["ROTATING_PROXY_LIST_PATH"] = self.proxies_file
+    #         base_config.update(proxy_config)
+    #
+    #     if include_patterns:
+    #         base_config["include_url_regex"] = "|".join(include_patterns)
+    #     if exclude_patterns:
+    #         base_config["exclude_url_regex"] = "|".join(exclude_patterns)
+    #
+    #         # start the crawl
+    #     self.logger.info(f"Starting crawl on {url} with max pages {max_pages}")
+    #
+    #     # adv.crawl(url_list=url, output_file=str(output_file), follow_links=True, custom_settings=base_config)
+    #
+    #     self.logger.info(f"Crawl completed. Results saved to {output_file}")
+    #     return str(output_file)
+
+    def _get_robot_parser(self, base_url: str) -> RobotFileParser:
+        """Parse the robots.txt file for the given base URL."""
+        rp = RobotFileParser()
+        rp.set_url(urljoin(base_url, "/robots.txt"))
+        rp.read()
+        return rp
 
     def analyze_robots_txt_with_headers(self, url: str) -> Dict[str, Any]:
         """Analyzes the robots.txt file with custom anti-detection headers."""
@@ -138,6 +175,15 @@ class SmartCrawler:
         except Exception as e:
             self.logger.error(f"Error during robots.txt analysis: {e}")
             raise
+
+    def _get_sitemap_urls(self, sitemap_url: str) -> List[str]:
+        """Get the sitemap URLs from the given sitemap URL."""
+        proxy_to_use = random.choice(self.proxies) if self.use_proxy else None
+        proxies = {"http": proxy_to_use} if proxy_to_use else None
+        resp = requests.get(sitemap_url, proxies=proxies, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.content, "lxml")
+        return [loc.text.strip() for loc in soup.find_all("loc")]
 
     def _parse_robots_content(self, content: str, robots_url: str) -> pd.DataFrame:
         """Processes the robots.txt content and converts it to DataFrame."""
@@ -321,12 +367,13 @@ if __name__ == "__main__":
     if args.proxies_file is None:
         USE_PROXY = False
 
-    crawler = SmartCrawler(
+    crawler = SimpleCrawler(
         use_proxy=USE_PROXY, proxies_file=args.proxies_file, output_dir=args.output_dir, config_path=args.config_path
     )
+
     # result = crawler.analyze_robots_txt_with_headers(args.url)
     # result = crawler.analyze_sitemap(url=args.url)
-    result = crawler.crawl_with_analysis(
-        url=args.url,
-    )
-    print(result)
+    # result = crawler.crawl_pages(
+    #     url=args.url,
+    # )
+    # print(result)

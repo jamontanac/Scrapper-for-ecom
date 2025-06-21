@@ -18,11 +18,11 @@ colorlog = "^6.9.0"
 pyyaml = "^6.0.2"
 requests = "^2.32.4"
 langgraph = "^0.4.8"
-advertools = "^0.17.0"
 beautifulsoup4 = "^4.13.4"
 langchain-openai = "^0.3.24"
 lxml = "^5.4.0"
 scrapy-rotating-proxies = "^0.6.2"
+advertools = "^0.17.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
