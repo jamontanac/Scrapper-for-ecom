@@ -6,7 +6,7 @@ system_prompt: >
     </role>
 
     <objective>
-      1. Analyze provided web resources against specified interests ({interests})
+      1. Analyze provided web resources against specified interests ( {interests} )
       2. Identify the most relevant components using these criteria:
          - Direct match to interest keywords
          - Structural significance (e.g., <main> sections, <article> tags, JSON keys)

@@ -524,12 +524,26 @@ if __name__ == "__main__":
         connect_timeout=args.connect_timeout,
         read_timeout=args.read_timeout,
     )
-    response, error = crawler.make_realistic_request(args.url)
-    if response:
-        print(f"response is not none, status code: {response.status_code}")
-        print(response.text)
-    else:
-        print(error)
+    # ----- this works -----
+    # response, error = crawler.make_realistic_request(args.url)
+    # if response:
+    #     print(f"response is not none, status code: {response.status_code}")
+    #     print(response.text)
+    # else:
+    #     print(error)
+    # ------ testing the crawler
+    ulrs = [
+        "https://www.rei.com/sitemap-adventures.xml",
+        "https://www.rei.com/sitemap-core-category.xml",
+        "https://www.rei.com/sitemap-core-category-facet.xml",
+        "https://www.rei.com/sitemap-product.xml",
+        "https://www.rei.com/sitemap-learn.xml",
+    ]
+    crawler.crawl_pages(
+        urls=ulrs,
+        max_pages=10,
+        crawl_file="data/results_scrapper/test_crawl.txt",
+    )
     # URLS = crawler._get_sitemap_urls(args.url, path_site="data/results_scrapper/sitemap.xml")
     # print(URLS)
     # result = crawler.analyze_robots_txt_with_headers(args.url)

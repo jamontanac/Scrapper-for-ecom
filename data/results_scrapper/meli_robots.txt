@@ -15,4 +15,3 @@ Disallow: /jms/*/gz/webdevice/config
 Disallow: /adn/api*
 Allow: /.well-known/
 Allow: /jms/*/lgz/msl/login/
-
