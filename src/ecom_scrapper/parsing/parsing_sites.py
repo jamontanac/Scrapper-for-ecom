@@ -23,11 +23,15 @@ class NavigationAgent(BaseModel):
 
     urls: List[str] = Field(
         description="List of URLs found that are interesting for further navigation.",
-        json_schema_extra={"examples": ['urls:["https://website.com/camping","https://website.com/tents"]']},
+        # json_schema_extra={"examples": ['urls:["https://website.com/camping","https://website.com/tents"]']},
     )
     rules: List[str] = Field(
         ...,
         description="List of rules that should be applied during the next extraction navigation.",
+    )
+    reasoning: List[str] = Field(
+        ...,
+        description="List of reasoning steps taken to arrive at the conclusions.",
     )
 
 
@@ -73,7 +77,7 @@ def create_generic_message(content: str, role: str, message_type="ai") -> Union[
 
 def load_config():
     """Load the configuration for the navigation agent from a YAML file."""
-    config_file = pathlib.Path(get_project_root()).joinpath("config", "navigation_agent.yaml")
+    config_file = pathlib.Path(get_project_root()).joinpath("config", "navigation_agent_config.yaml")
     config = read_yaml_file(config_file)
     return config
 
@@ -98,11 +102,11 @@ def format_and_send_messages(
     interests: Optional[List[str]] = None,
     model: str = "gtp-4o",
     config: Dict[str, Any] = load_config(),
-) -> Dict[str, Any]:
+) -> NavigationAgent:
     """Format the messages for the OpenAI chat completion request."""
     main_prompt = config["system_prompt"]
     if not interests:
-        interests = list(config["interests"].keys())
+        interests = list(config["interests"])
     # str_interests = format_dicts(interests)
     str_interests = ", ".join(interests)
     str_resources = "\n".join(resources)
@@ -118,18 +122,14 @@ def format_and_send_messages(
     return answer
 
 
-# def submit_request_to_openai(messages: List[ChatCompletionMessageParam], model: str = "gpt-3.5-turbo"):
-#     response = openai.chat.completions.create(model=model, messages=messages, temperature=0.3, max_tokens=2500)
-#     return response.choices[0].message.content
 
-
-def run_navigation_agent(
+def get_next_sites_from_sitemap(
     url: str,
     output_dir: str,
     model: str = "gpt-4o",
     use_proxy: bool = False,
     proxy_file: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> NavigationAgent:
     """Run the navigation agent with the provided resources and interests.
 
     Args:
@@ -143,13 +143,16 @@ def run_navigation_agent(
         str: The response from the OpenAI API.
     """
     crawler = SimpleCrawler(output_dir=output_dir, proxies_file=proxy_file, use_proxy=use_proxy)
-    urls = crawler._get_sitemap_urls(url=url, path_site="data/results_scrapper/sitemap.xml")
+    urls = crawler._get_sitemap_urls(url=url, path_site=f"{output_dir[:-1]}/sitemap.xml")
     answer = format_and_send_messages(
         resources=urls,
         model=model,
     )
-    return answer
+    # urls_to_look, rules, reasoning = answer.urls, answer.rules, answer.reasoning
 
+    # crawler.
+    return answer
+def 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the navigation agent.")
@@ -163,7 +166,7 @@ if __name__ == "__main__":
     parser.add_argument("--proxy-file", type=str, default=None, help="Path to the proxy file.")
 
     args = parser.parse_args()
-    result = run_navigation_agent(
+    result = get_next_sites_from_sitemap(
         url=args.url,
         output_dir=args.output_dir,
         model=args.model,
