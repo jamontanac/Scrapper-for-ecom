@@ -40,13 +40,13 @@ class SimpleCrawler:
     """
 
     def __init__(
-        self, 
-        output_dir: str, 
-        use_proxy: bool = False, 
-        proxies_file: Optional[str] = None, 
+        self,
+        output_dir: str,
+        use_proxy: bool = False,
+        proxies_file: Optional[str] = None,
         verify_ssl: bool = True,
         connect_timeout: int = 10,
-        read_timeout: int = 30
+        read_timeout: int = 30,
     ) -> None:
         """Starts a crawler with the proxy config.
 
@@ -89,14 +89,14 @@ class SimpleCrawler:
 
         # Configure retry strategy
         retry_strategy = Retry(
-            total=2,
+            total=1,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["HEAD", "GET", "OPTIONS"],
             backoff_factor=1,
         )
 
         # Configure HTTP adapter with retry strategy
-        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=5, max_retries=retry_strategy)
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=1, max_retries=retry_strategy)
 
         # Mount adapter for both HTTP and HTTPS
         session.mount("http://", adapter)
@@ -198,13 +198,13 @@ class SimpleCrawler:
             ValueError: If urls list is empty or max_pages is invalid
             IOError: If unable to write to output file
         """
+        timestamp = int(time.time())
         if not urls:
             raise ValueError("URLs list cannot be empty")
         if max_pages <= 0:
             raise ValueError("max_pages must be greater than 0")
 
         if not crawl_file:
-            timestamp = int(time.time())
             output_file = self.output_dir / f"crawl_iter_{timestamp}.txt"
         else:
             output_file = Path(crawl_file)
@@ -244,11 +244,10 @@ class SimpleCrawler:
                             count += 1
                             if url not in visited:
                                 visited.add(url)
-                                folder_file = self.output_dir / "crawl"
+                                folder_file = self.output_dir / "crawl" / f"{timestamp}"
                                 folder_file.mkdir(exist_ok=True)
                                 file_name = folder_file / f"{self._create_random_name()}.html"
                                 f.write(f"{url} --> {response.status_code} --> {file_name}\n")
-
                                 try:
                                     with open(file_name, "w", encoding="utf-8") as html_file:
                                         html_file.write(response.text)
@@ -466,7 +465,7 @@ class SimpleCrawler:
                     self.logger.error(f"Failed to fetch {url} after {max_retries} timeout attempts.")
                     return None, str(e)
                 # Add exponential backoff for timeout retries
-                backoff_time = 2 ** trying_number
+                backoff_time = 2**trying_number
                 self.logger.info(f"Retrying {url} in {backoff_time} seconds due to timeout...")
                 time.sleep(backoff_time)
                 return self.make_realistic_request(url, max_retries=max_retries, trying=trying_number)

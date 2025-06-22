@@ -35,6 +35,14 @@ class NavigationAgent(BaseModel):
     )
 
 
+class ExtractionAgent(BaseModel):
+    """Class with the expected output for extraction."""
+
+    extracted_data: Dict[str, str] = Field(
+        description="Dictionary with the extracted data from the website.",
+    )
+
+
 def select_llm_model(model_name) -> BaseChatModel:
     """Select the LLM model to use."""
     if "gpt" in model_name.lower():
@@ -75,9 +83,16 @@ def create_generic_message(content: str, role: str, message_type="ai") -> Union[
     return AIMessage(content=content, role=role)
 
 
-def load_config():
+def load_config_navigation():
     """Load the configuration for the navigation agent from a YAML file."""
     config_file = pathlib.Path(get_project_root()).joinpath("config", "navigation_agent_config.yaml")
+    config = read_yaml_file(config_file)
+    return config
+
+
+def load_config_parsing():
+    """Load the configuration for the navigation agent from a YAML file."""
+    config_file = pathlib.Path(get_project_root()).joinpath("config", "parsing_agent_config.yaml")
     config = read_yaml_file(config_file)
     return config
 
@@ -97,19 +112,48 @@ def format_dicts(data, indent_level=0) -> str:
     return final_str
 
 
-def format_and_send_messages(
+def format_and_send_messages_parsing(
+    resource_path: str,
+    fields_to_extract: Optional[List[str]] = None,
+    model: str = "gtp-4o",
+    config: Dict[str, Any] = load_config_parsing(),
+) -> ExtractionAgent:
+    """Format the messages for the OpenAI chat completion request."""
+    if not fields_to_extract:
+        fields_to_extract = list(config["fields_to_extract"])
+    # str_interests = format_dicts(fields_to_extract)
+    str_fields = ", ".join(fields_to_extract)
+    str_resources = ""
+    with open(resource_path, "r", encoding="utf-8") as f:
+        for line in f.readlines():
+            str_resources += line.strip() + "\n"
+
+    main_prompt = config["system_prompt"].format(fields=str_fields)
+    user_prompt = config["user_prompt"].format(fields=str_fields, web_resource=str_resources)
+    messages_to_send = [
+        create_generic_message(main_prompt, role="system", message_type="ai"),
+        create_generic_message(user_prompt, role="user", message_type="user"),
+    ]
+    # start the model
+    llm_structured = create_structured_llm(select_llm_model(model), ExtractionAgent)
+
+    answer = llm_structured.invoke(messages_to_send)
+    return answer
+
+
+def format_and_send_messages_navigation(
     resources: List[str],
     interests: Optional[List[str]] = None,
     model: str = "gtp-4o",
-    config: Dict[str, Any] = load_config(),
+    config: Dict[str, Any] = load_config_navigation(),
 ) -> NavigationAgent:
     """Format the messages for the OpenAI chat completion request."""
-    main_prompt = config["system_prompt"]
     if not interests:
         interests = list(config["interests"])
     # str_interests = format_dicts(interests)
     str_interests = ", ".join(interests)
     str_resources = "\n".join(resources)
+    main_prompt = config["system_prompt"].format(interests=str_interests)
     user_prompt = config["user_prompt"].format(interests=str_interests, web_resource=str_resources)
     messages_to_send = [
         create_generic_message(main_prompt, role="system", message_type="ai"),
@@ -120,7 +164,6 @@ def format_and_send_messages(
 
     answer = llm_structured.invoke(messages_to_send)
     return answer
-
 
 
 def get_next_sites_from_sitemap(
@@ -144,15 +187,35 @@ def get_next_sites_from_sitemap(
     """
     crawler = SimpleCrawler(output_dir=output_dir, proxies_file=proxy_file, use_proxy=use_proxy)
     urls = crawler._get_sitemap_urls(url=url, path_site=f"{output_dir[:-1]}/sitemap.xml")
-    answer = format_and_send_messages(
+    answer = format_and_send_messages_navigation(
         resources=urls,
         model=model,
     )
-    # urls_to_look, rules, reasoning = answer.urls, answer.rules, answer.reasoning
 
-    # crawler.
     return answer
-def 
+
+
+def get_next_sites_from_urls(
+    urls: List[str],
+    model: str = "gpt-4o",
+) -> NavigationAgent:
+    answer = format_and_send_messages_navigation(
+        resources=urls,
+        model=model,
+    )
+    return answer
+
+
+def requests_urls(
+    urls: List[str],
+    output_dir: str,
+    model: str = "gpt-4o",
+    use_proxy: bool = False,
+    proxy_file: Optional[str] = None,
+):
+    crawler = SimpleCrawler(output_dir=output_dir, proxies_file=proxy_file, use_proxy=use_proxy)
+    crawler.crawl_pages(urls=urls)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the navigation agent.")
