@@ -1,19 +1,18 @@
 import argparse
 import pathlib
-import re
 from typing import Any, Dict, List, Optional, Type, Union
 
 import dotenv
-from langchain.text_splitter import CharacterTextSplitter
 from langchain_core.language_models import BaseChatModel
 
 # from openai.types.chat import ChatCompletionMessageParam
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from ecom_scrapper.crawler.crawler import SimpleCrawler
+from ecom_scrapper.parsing.html_parsing import HTMLContentFilter
 from ecom_scrapper.utils import get_logger, get_project_root, read_yaml_file
 
 logger = get_logger(__name__)
@@ -145,31 +144,43 @@ def format_and_send_messages_parsing(
     # str_interests = format_dicts(fields_to_extract)
     str_fields = ", ".join(fields_to_extract)
     # str_resources = ""
-    with open(resource_path, "r", encoding="utf-8") as f:
-        content = f.read()
-        content = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", content, flags=re.S)
+    with open(resource_path, "r", encoding="utf-8") as file:
+        raw_html_content = file.read()
+    filter_engine = HTMLContentFilter(
+        target_fields=fields_to_extract,
+        max_tokens=20000,  # Adjust as needed
+    )
 
-    splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    chunks = splitter.split_text(content)
+    filtered_html = filter_engine.filter_html(raw_html_content)
     llm_structured = create_structured_llm(select_llm_model(model), ExtractionAgent)
     main_prompt = config["system_prompt"]
-    for chunk in chunks:
-        user_prompt = config["user_prompt"].format(fields=str_fields, web_resource=chunk)
-        messages_to_send = [
-            create_generic_message(main_prompt, role="system", message_type="ai"),
-            create_generic_message(user_prompt, role="user", message_type="user"),
-        ]
-        try:
-            answer = llm_structured.invoke(messages_to_send)  # yield to process each chunk separately
-        except ValidationError:
-            answer = ExtractionAgent(extracted_data={}, extraction_metadata=ExtractionMetadata())
-        yield answer
-
+    user_prompt = config["user_prompt"].format(fields=str_fields, web_resource=filtered_html)
+    messages_to_send = [
+        create_generic_message(main_prompt, role="system", message_type="ai"),
+        create_generic_message(user_prompt, role="user", message_type="user"),
+    ]
+    answer = llm_structured.invoke(messages_to_send)  # yield to process each chunk separately
+    return answer
     # start the model
 
 
+#     ```python
+#     filter_instance = HTMLContentFilter(target_fields=['title', 'price'])
+#
+# # Get categorized URLs
+#     urls = filter_instance.extract_urls(html_content, 'https://example.com')
+#     print(f"Found {len(urls['links'])} links, {len(urls['images'])} images")
+#
+# # Get all URLs as a flat list
+#     all_urls = filter_instance.get_all_urls(html_content, 'https://example.com')
+#
+# # Get product-related URLs for e-commerce scraping
+#     product_urls = filter_instance.get_product_related_urls(html_content, 'https://example.com')
+#     ```
+
+
 def format_and_send_messages_navigation(
-    resources: List[str],
+    resources: List[str] | str,
     model: str,
     interests: Optional[List[str]] = None,
     config: Dict[str, Any] = load_config_navigation(),
@@ -179,7 +190,20 @@ def format_and_send_messages_navigation(
         interests = list(config["interests"])
     # str_interests = format_dicts(interests)
     str_interests = ", ".join(interests)
-    str_resources = "\n".join(resources)
+    if isinstance(resources, str):
+        with open(resources, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        filter_engine = HTMLContentFilter(interests)
+
+        # Get categorized URLs
+        # urls = filter_engine.extract_urls(html_content,None)
+
+        all_urls = filter_engine.get_all_urls(html_content, None)
+
+        # product_urls = filter_instance.get_product_related_urls(html_content)
+        str_resources = "\n".join(all_urls)
+    else:
+        str_resources = "\n".join(resources)
     main_prompt = config["system_prompt"]
     user_prompt = config["user_prompt"].format(interests=str_interests, web_resource=str_resources)
     messages_to_send = [
@@ -197,12 +221,9 @@ def extract_fields_from_file(
     file_path: str,
     model: str = "gpt-4o",
 ):
-    answers = format_and_send_messages_parsing(resource_path=file_path, model=model)
-    merged_extracted_data = {}
-    for answer in answers:
-        merged_extracted_data.update(answer)
+    answer = format_and_send_messages_parsing(resource_path=file_path, model=model)
 
-    return merged_extracted_data
+    return answer
 
 
 def get_next_sites_from_sitemap(
