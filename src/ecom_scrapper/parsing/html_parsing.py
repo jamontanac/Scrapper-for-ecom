@@ -1,5 +1,6 @@
 import re
-from typing import List, Set
+from typing import Dict, List, Set, Optional
+from urllib.parse import urljoin, urlparse
 
 import tiktoken
 from bs4 import BeautifulSoup, Tag
@@ -59,6 +60,254 @@ class HTMLContentFilter:
             html_content = re.sub(pattern, "", html_content, flags=re.DOTALL | re.IGNORECASE)
 
         return html_content
+
+    def extract_urls(self, html_content: str, base_url: Optional[str] = None) -> Dict[str, List[str]]:
+        """Extract all URLs referenced in the HTML content.
+        
+        Args:
+            html_content: The HTML content to parse
+            base_url: Base URL to resolve relative URLs (optional)
+            
+        Returns:
+            Dictionary categorizing URLs by type:
+            {
+                'links': [...],        # Links from <a> tags
+                'images': [...],       # Images from <img> tags
+                'scripts': [...],      # Scripts from <script> tags
+                'stylesheets': [...],  # Stylesheets from <link> tags
+                'forms': [...],        # Form actions from <form> tags
+                'media': [...],        # Video/audio sources
+                'iframes': [...],      # Iframe sources
+                'other': [...]         # Other URL references
+            }
+        """
+        soup = BeautifulSoup(html_content, "html.parser")
+        urls = {
+            'links': [],
+            'images': [],
+            'scripts': [],
+            'stylesheets': [],
+            'forms': [],
+            'media': [],
+            'iframes': [],
+            'other': []
+        }
+        
+        def normalize_url(url: str) -> Optional[str]:
+            """Normalize and resolve relative URLs."""
+            if not url or url.startswith(('javascript:', 'mailto:', 'tel:', '#')):
+                return None
+            
+            url = url.strip()
+            if base_url and not url.startswith(('http://', 'https://', '//')):
+                try:
+                    url = urljoin(base_url, url)
+                except Exception:
+                    return None
+            
+            return url
+        
+        def is_valid_url(url: Optional[str]) -> bool:
+            """Check if URL is valid and not a data URI or fragment."""
+            if not url:
+                return False
+            
+            # Skip data URIs, fragments, and javascript
+            if url.startswith(('data:', '#', 'javascript:', 'mailto:', 'tel:')):
+                return False
+                
+            try:
+                parsed = urlparse(url)
+                return bool(parsed.netloc or parsed.path)
+            except Exception:
+                return False
+        
+        # Extract links from <a> tags
+        for link in soup.find_all('a', href=True):
+            if isinstance(link, Tag):
+                href = link.get('href')
+                if href:
+                    url = normalize_url(str(href))
+                    if url and is_valid_url(url) and url not in urls['links']:
+                        urls['links'].append(url)
+        
+        # Extract images from <img> tags
+        for img in soup.find_all('img', src=True):
+            if isinstance(img, Tag):
+                src = img.get('src')
+                if src:
+                    url = normalize_url(str(src))
+                    if url and is_valid_url(url) and url not in urls['images']:
+                        urls['images'].append(url)
+        
+        # Extract scripts from <script> tags
+        for script in soup.find_all('script', src=True):
+            if isinstance(script, Tag):
+                src = script.get('src')
+                if src:
+                    url = normalize_url(str(src))
+                    if url and is_valid_url(url) and url not in urls['scripts']:
+                        urls['scripts'].append(url)
+        
+        # Extract stylesheets from <link> tags
+        for link in soup.find_all('link', href=True):
+            if isinstance(link, Tag):
+                rel = link.get('rel')
+                if rel:
+                    if isinstance(rel, list):
+                        rel_str = ' '.join(rel).lower()
+                    else:
+                        rel_str = str(rel).lower()
+                        
+                    if 'stylesheet' in rel_str or 'icon' in rel_str:
+                        href = link.get('href')
+                        if href:
+                            url = normalize_url(str(href))
+                            if url and is_valid_url(url) and url not in urls['stylesheets']:
+                                urls['stylesheets'].append(url)
+        
+        # Extract form actions from <form> tags
+        for form in soup.find_all('form', action=True):
+            if isinstance(form, Tag):
+                action = form.get('action')
+                if action:
+                    url = normalize_url(str(action))
+                    if url and is_valid_url(url) and url not in urls['forms']:
+                        urls['forms'].append(url)
+        
+        # Extract media sources from <video>, <audio>, <source> tags
+        for media in soup.find_all(['video', 'audio'], src=True):
+            if isinstance(media, Tag):
+                src = media.get('src')
+                if src:
+                    url = normalize_url(str(src))
+                    if url and is_valid_url(url) and url not in urls['media']:
+                        urls['media'].append(url)
+        
+        for source in soup.find_all('source', src=True):
+            if isinstance(source, Tag):
+                src = source.get('src')
+                if src:
+                    url = normalize_url(str(src))
+                    if url and is_valid_url(url) and url not in urls['media']:
+                        urls['media'].append(url)
+        
+        # Extract iframe sources
+        for iframe in soup.find_all('iframe', src=True):
+            if isinstance(iframe, Tag):
+                src = iframe.get('src')
+                if src:
+                    url = normalize_url(str(src))
+                    if url and is_valid_url(url) and url not in urls['iframes']:
+                        urls['iframes'].append(url)
+        
+        # Extract URLs from CSS background-image properties
+        style_pattern = r'background-image\s*:\s*url\(["\']?([^"\')\s]+)["\']?\)'
+        for element in soup.find_all(style=True):
+            if isinstance(element, Tag):
+                style_content = element.get('style')
+                if style_content:
+                    matches = re.findall(style_pattern, str(style_content), re.IGNORECASE)
+                    for match in matches:
+                        url = normalize_url(match)
+                        if url and is_valid_url(url) and url not in urls['other']:
+                            urls['other'].append(url)
+        
+        # Extract URLs from srcset attributes (responsive images)
+        for img in soup.find_all(['img', 'source'], srcset=True):
+            if isinstance(img, Tag):
+                srcset = img.get('srcset')
+                if srcset:
+                    # Parse srcset format: "url1 1x, url2 2x" or "url1 100w, url2 200w"
+                    srcset_urls = re.findall(r'([^\s,]+)(?:\s+[0-9.]+[wx])?', str(srcset))
+                    for srcset_url in srcset_urls:
+                        url = normalize_url(srcset_url)
+                        if url and is_valid_url(url) and url not in urls['images']:
+                            urls['images'].append(url)
+        
+        # Extract meta refresh URLs
+        for meta in soup.find_all('meta', attrs={'http-equiv': re.compile(r'refresh', re.I)}):
+            if isinstance(meta, Tag):
+                content = meta.get('content')
+                if content:
+                    # Format: "5; url=http://example.com"
+                    match = re.search(r'url=([^;]+)', str(content), re.IGNORECASE)
+                    if match:
+                        url = normalize_url(match.group(1).strip())
+                        if url and is_valid_url(url) and url not in urls['other']:
+                            urls['other'].append(url)
+        
+        # Extract canonical URLs
+        for link in soup.find_all('link', rel='canonical', href=True):
+            if isinstance(link, Tag):
+                href = link.get('href')
+                if href:
+                    url = normalize_url(str(href))
+                    if url and is_valid_url(url) and url not in urls['other']:
+                        urls['other'].append(url)
+        
+        # Log extraction results
+        total_urls = sum(len(url_list) for url_list in urls.values())
+        self.logger.info(f"Extracted {total_urls} URLs: "
+                        f"links={len(urls['links'])}, "
+                        f"images={len(urls['images'])}, "
+                        f"scripts={len(urls['scripts'])}, "
+                        f"stylesheets={len(urls['stylesheets'])}, "
+                        f"forms={len(urls['forms'])}, "
+                        f"media={len(urls['media'])}, "
+                        f"iframes={len(urls['iframes'])}, "
+                        f"other={len(urls['other'])}")
+        
+        return urls
+
+    def get_all_urls(self, html_content: str, base_url: Optional[str] = None) -> List[str]:
+        """Get all unique URLs from HTML content as a flat list.
+        
+        Args:
+            html_content: The HTML content to parse
+            base_url: Base URL to resolve relative URLs (optional)
+            
+        Returns:
+            List of all unique URLs found in the HTML
+        """
+        categorized_urls = self.extract_urls(html_content, base_url)
+        all_urls = set()
+        
+        for url_list in categorized_urls.values():
+            all_urls.update(url_list)
+        
+        return sorted(list(all_urls))
+
+    def get_product_related_urls(self, html_content: str, base_url: Optional[str] = None) -> List[str]:
+        """Extract URLs that are likely related to products (for e-commerce scraping).
+        
+        Args:
+            html_content: The HTML content to parse
+            base_url: Base URL to resolve relative URLs (optional)
+            
+        Returns:
+            List of URLs that likely point to products or product-related content
+        """
+        categorized_urls = self.extract_urls(html_content, base_url)
+        product_urls = []
+        
+        # Product-related keywords to look for in URLs
+        product_keywords = [
+            'product', 'item', 'detail', 'p/', '/p/', 
+            'catalog', 'shop', 'buy', 'purchase',
+            'goods', 'merchandise', 'listing'
+        ]
+        
+        # Check links for product-related patterns
+        for url in categorized_urls['links']:
+            url_lower = url.lower()
+            if any(keyword in url_lower for keyword in product_keywords):
+                product_urls.append(url)
+        
+        # Also include product images as they often indicate product pages
+        product_urls.extend(categorized_urls['images'])
+        
+        return list(set(product_urls))  # Remove duplicates
 
     def extract_relevant_sections(self, html_content: str) -> str:
         """Extract only sections likely to contain target fields."""
@@ -189,8 +438,6 @@ class HTMLContentFilter:
             ["footer", ".footer"],
             # Sidebar content
             [".sidebar", ".aside", "aside"],
-            # Large text blocks without field keywords
-            ["p", "div"],
         ]
 
         for priority_group in removal_priorities:
