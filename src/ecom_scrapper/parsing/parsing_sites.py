@@ -52,14 +52,18 @@ class ExtractionAgent(BaseModel):
     """Class with the expected output for extraction."""
 
     extracted_data: Dict[str, str] = Field(
-        description="Dictionary with the extracted data from the website. All values are strings, with empty strings for missing fields.",
+        description="Dictionary with the extracted data from the website."
+        "All values are strings, with empty strings for missing fields.",
         default_factory=dict,
     )
     extraction_metadata: ExtractionMetadata = Field(
-        description="Comprehensive metadata about the extraction process including success rates, methods used, and confidence scores"
+        description="Comprehensive metadata about the extraction process"
+        "including success rates, methods used, and confidence scores"
     )
 
-    class config:
+    class config:  # pylint: disable= invalid-name
+        """extra configuration for Pydantic model."""
+
         extra = "forbid"
 
 
@@ -182,6 +186,7 @@ def format_and_send_messages_parsing(
 def format_and_send_messages_navigation(
     resources: List[str] | str,
     model: str,
+    base_url: str,
     interests: Optional[List[str]] = None,
     config: Dict[str, Any] = load_config_navigation(),
 ) -> NavigationAgent:
@@ -196,11 +201,9 @@ def format_and_send_messages_navigation(
         filter_engine = HTMLContentFilter(interests)
 
         # Get categorized URLs
-        # urls = filter_engine.extract_urls(html_content,None)
 
-        all_urls = filter_engine.get_all_urls(html_content, None)
+        all_urls = filter_engine.get_all_urls(html_content, base_url=base_url)
 
-        # product_urls = filter_instance.get_product_related_urls(html_content)
         str_resources = "\n".join(all_urls)
     else:
         str_resources = "\n".join(resources)
@@ -221,6 +224,7 @@ def extract_fields_from_file(
     file_path: str,
     model: str = "gpt-4o",
 ):
+    """Extract fields from a file using the OpenAI model."""
     answer = format_and_send_messages_parsing(resource_path=file_path, model=model)
 
     return answer
@@ -229,6 +233,7 @@ def extract_fields_from_file(
 def get_next_sites_from_sitemap(
     url: str,
     output_dir: str,
+    base_url: str,
     model: str = "gpt-4o",
     use_proxy: bool = False,
     proxy_file: Optional[str] = None,
@@ -250,6 +255,7 @@ def get_next_sites_from_sitemap(
     answer = format_and_send_messages_navigation(
         resources=urls,
         model=model,
+        base_url=base_url,
     )
 
     return answer
@@ -257,13 +263,25 @@ def get_next_sites_from_sitemap(
 
 def get_next_sites_from_urls(
     urls: List[str],
+    base_url: str,
     model: str = "gpt-4o",
 ) -> NavigationAgent:
     """Call the model to get the next sites from a list of URLs."""
     answer = format_and_send_messages_navigation(
         resources=urls,
         model=model,
+        base_url=base_url,
     )
+    return answer
+
+
+def get_next_sites_from_file(
+    html_file_path: str,
+    base_url: str,
+    model: str = "gpt-4o",
+) -> NavigationAgent:
+    """Get next sites from a file containing HTML content."""
+    answer = format_and_send_messages_navigation(resources=html_file_path, base_url=base_url, model=model)
     return answer
 
 
@@ -273,7 +291,7 @@ def requests_urls(
     use_proxy: bool = False,
     proxy_file: Optional[str] = None,
 ):
-    """this function is used to request the URLs and save the results in the output directory."""
+    """This function is used to request the URLs and save the results in the output directory."""
     crawler = SimpleCrawler(output_dir=output_dir, proxies_file=proxy_file, use_proxy=use_proxy)
     output_file = crawler.crawl_pages(urls=urls)
     return output_file
@@ -300,7 +318,9 @@ if __name__ == "__main__":
     #     use_proxy=args.use_proxy,
     #     proxy_file=args.proxy_file,
     # )
-    result = extract_fields_from_file(file_path="data/results_scrapper/main_site.html")
+
+    # result = extract_fields_from_file(file_path="data/results_scrapper/main_site.html")
+    result = get_next_sites_from_file(html_file_path=args.output_dir + "main_site.html", base_url=args.url)
     print(result)
 #     messages = format_messages(resources, interests)
 #     response = submit_request_to_openai(messages, model)

@@ -183,7 +183,9 @@ class SimpleCrawler:
         self.logger.info(f"Filtered {len(urls) - len(urls_to_crawl)} already visited URLs")
         return urls_to_crawl
 
-    def crawl_pages(self, urls: List[str], max_pages: int = 50, crawl_file: Optional[str] = None) -> str:
+    def crawl_pages(
+        self, urls: List[str], max_pages: int = 50, crawl_file: Optional[str] = None
+    ) -> str:  # pylint: disable=too-many-branches
         """Crawls the given URLs and saves the results to a file.
 
         Args:
@@ -199,10 +201,10 @@ class SimpleCrawler:
             IOError: If unable to write to output file
         """
         timestamp = int(time.time())
-        if not urls:
-            raise ValueError("URLs list cannot be empty")
-        if max_pages <= 0:
-            raise ValueError("max_pages must be greater than 0")
+        # if not urls:
+        #     raise ValueError("URLs list cannot be empty")
+        # if max_pages <= 0:
+        #     raise ValueError("max_pages must be greater than 0")
 
         if not crawl_file:
             output_file = self.output_dir / f"crawl_iter_{timestamp}.txt"
@@ -259,7 +261,7 @@ class SimpleCrawler:
                         else:
                             f.write(f"{url} --> Unreachable\n")
 
-                    except Exception as e:
+                    except Exception as e:  # pylint: disable=broad-exception-caught
                         self.logger.error(f"Unexpected error processing {url}: {e}")
                         f.write(f"{url} --> UNEXPECTED_ERROR: {str(e)}\n")
 
@@ -320,7 +322,9 @@ class SimpleCrawler:
             self.logger.error(f"Error during robots.txt analysis: {e}")
             raise
 
-    def _get_sitemap_urls(self, url: str, request: bool = False, path_site: Optional[str] = None) -> List[str]:
+    def _get_sitemap_urls(
+        self, url: str, request: bool = False, path_site: Optional[str] = None
+    ) -> List[str]:  # pylint: disable= too-many-return-statements
         """Get the sitemap URLs from the given sitemap URL.
 
         Args:
@@ -343,7 +347,7 @@ class SimpleCrawler:
             except (IOError, OSError) as e:
                 self.logger.error(f"Failed to read sitemap file {path_site}: {e}")
                 return []
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 self.logger.error(f"Failed to parse sitemap file {path_site}: {e}")
                 return []
 
@@ -362,9 +366,8 @@ class SimpleCrawler:
                     sitemap_data = BeautifulSoup(response.content, "lxml")
                     self.logger.info(f"Successfully fetched sitemap from {sitemap_url}")
                     break
-                else:
-                    self.logger.debug(f"Failed to fetch sitemap from {sitemap_url}: {error}")
-            except Exception as e:
+                self.logger.debug(f"Failed to fetch sitemap from {sitemap_url}: {error}")
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 self.logger.error(f"Error processing sitemap {sitemap_url}: {e}")
                 continue
 
@@ -376,7 +379,7 @@ class SimpleCrawler:
             urls = [loc.text.strip() for loc in sitemap_data.find_all("loc")]
             self.logger.info(f"Found {len(urls)} URLs in sitemap")
             return urls
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             self.logger.error(f"Failed to extract URLs from sitemap: {e}")
             return []
 
@@ -459,7 +462,7 @@ class SimpleCrawler:
                     self.logger.error(f"Failed to fetch {url} after {max_retries} attempts.")
                     return None, str(e)
                 return self.make_realistic_request(url, max_retries=max_retries, trying=trying_number)
-            elif "timeout" in str(e).lower() or "ReadTimeoutError" in str(e):
+            if "timeout" in str(e).lower() or "ReadTimeoutError" in str(e):
                 self.logger.warning(f"Timeout error for {url} (attempt {trying_number}/{max_retries}): {e}")
                 if trying_number >= max_retries:
                     self.logger.error(f"Failed to fetch {url} after {max_retries} timeout attempts.")
@@ -469,9 +472,8 @@ class SimpleCrawler:
                 self.logger.info(f"Retrying {url} in {backoff_time} seconds due to timeout...")
                 time.sleep(backoff_time)
                 return self.make_realistic_request(url, max_retries=max_retries, trying=trying_number)
-            else:
-                self.logger.error(f"Error fetching {url}: {e}")
-                return None, str(e)
+            self.logger.error(f"Error fetching {url}: {e}")
+            return None, str(e)
         finally:
             time.sleep(random.uniform(1, 3))  # Sleep to avoid overwhelming the server
 
