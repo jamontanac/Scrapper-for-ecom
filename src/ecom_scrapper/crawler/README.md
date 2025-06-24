@@ -1,3 +1,31 @@
+## SimpleCrawler: Robust Web Crawling with Occasional Failures
+
+The `SimpleCrawler` implementation (see `src/ecom_scrapper/crawler/crawler.py`) is designed to provide a robust and flexible way to make HTTP requests (petitions) to websites, especially for e-commerce data extraction. It includes features such as:
+
+- Proxy rotation for anonymity
+- Anti-detection headers and user-agent rotation
+- Respect for robots.txt rules
+- Sitemap parsing for URL discovery
+- Rate limiting and exponential backoff for retries
+- Persistent logging and error handling
+
+**Purpose:**
+
+The main goal of this implementation is to maximize the success rate of web requests while minimizing the risk of being blocked or detected as a bot. It is built to handle a variety of network and server-side issues, making it suitable for crawling complex or protected sites.
+
+**Important Note:**
+
+Despite these robust features, it is important to understand that the crawler may still fail from time to time. Failures can occur due to:
+
+- Aggressive anti-bot measures on target sites
+- Proxy server unreliability or blacklisting
+- Network instability or timeouts
+- Unexpected changes in website structure or access policies
+
+The crawler includes retry logic and detailed logging to help you diagnose and mitigate these issues, but 100% reliability cannot be guaranteed for all sites and all conditions.
+
+For more details and usage examples, see `src/ecom_scrapper/crawler/README.md`.
+
 ## 🚀 How to Use
 
 ### Option 1: Command Line with Custom Timeouts

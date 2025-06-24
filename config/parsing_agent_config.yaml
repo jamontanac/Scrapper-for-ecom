@@ -2,7 +2,7 @@ name: parsing agent
 system_prompt: >
   You are an expert at extracting structured product information from HTML content.
 
-  Your task is to analyze the provided HTML content and extract product information. 
+  Your task is to analyze the provided HTML content and extract product information.
     Focus on identifying individual products and their key attributes.
 
   **EXTRACTION GUIDELINES:**

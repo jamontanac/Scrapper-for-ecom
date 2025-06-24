@@ -44,7 +44,7 @@ class NavigationAgent(BaseModel):
 
 # Data Models
 class ProductData(BaseModel):
-    """Product information extracted from HTML"""
+    """Product information extracted from HTML."""
 
     name: Optional[str] = Field(default=None, description="The product name or title")
     price: Optional[str] = Field(default=None, description="The product price (e.g., '$29.95' or '$19.95 - $39.95')")
@@ -54,12 +54,13 @@ class ProductData(BaseModel):
 
 
 class ProductList(BaseModel):
-    """List of products extracted from HTML content"""
+    """List of products extracted from HTML content."""
 
     products: List[ProductData] = Field(description="List of products found in the HTML content")
 
 
 def create_extraction_chain(model_name: str, chunk: Any):
+    """Create a chain to extract product information from HTML content using a specified LLM model."""
     config = load_config_parsing()
     prompt = config["system_prompt"]
     llm_model = select_llm_model(model_name)
@@ -69,7 +70,7 @@ def create_extraction_chain(model_name: str, chunk: Any):
     try:
         result = chain.invoke({"html_content": chunk[:3000], "format_instructions": parser.get_format_instructions()})
         return result
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error processing with LLM: {e}")
         return extract_from_text_content(chunk.page_content)
 
@@ -106,7 +107,7 @@ def create_structured_llm(llm_model: BaseChatModel, data_structure: Type[BaseMod
 
 
 def preprocess_html_file(html_file_path: str, max_chunk_size: int = 3000) -> List[Any]:
-    """Preprocess HTML file to extract relevant product sections
+    """Preprocess HTML file to extract relevant product sections.
 
     Args:
         html_file_path: Path to HTML file
@@ -145,13 +146,13 @@ def preprocess_html_file(html_file_path: str, max_chunk_size: int = 3000) -> Lis
                 product_chunks.append(chunk)
         return product_chunks
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error preprocessing HTML file: {e}")
         return []
 
 
 def extract_from_text_content(text_content: str) -> List[ProductData]:
-    """Extract products from raw text content (fallback method)
+    """Extract products from raw text content (fallback method).
 
     Args:
         text_content: Raw text content from HTML
@@ -306,29 +307,31 @@ def requests_urls(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the navigation agent.")
-    parser.add_argument("--url", type=str, required=True, help="The URL to navigate.")
-    parser.add_argument(
+    arg_parser = argparse.ArgumentParser(description="Run the navigation agent.")
+    arg_parser.add_argument("--url", type=str, required=True, help="The URL to navigate.")
+    arg_parser.add_argument(
         "--config-crawler-path", type=str, default="config/navigation_agent.yaml", help="Path to the config file."
     )
-    parser.add_argument("--output-dir", type=str, default="data/results_scrapper", help="Directory to save results.")
-    parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model to use.")
-    parser.add_argument("--use-proxy", action="store_true", help="Use proxy for requests.", default=False)
-    parser.add_argument("--proxy-file", type=str, default=None, help="Path to the proxy file.")
+    arg_parser.add_argument(
+        "--output-dir", type=str, default="data/results_scrapper", help="Directory to save results."
+    )
+    arg_parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model to use.")
+    arg_parser.add_argument("--use-proxy", action="store_true", help="Use proxy for requests.", default=False)
+    arg_parser.add_argument("--proxy-file", type=str, default=None, help="Path to the proxy file.")
 
-    args = parser.parse_args()
+    args = arg_parser.parse_args()
     logger.info(f"Arguments: {args}")
 
-    chunks = preprocess_html_file(html_file_path=args.output_dir + "climbing.html", max_chunk_size=30000)
-    logger.info(f"Number of chunks extracted: {len(chunks)}")
-    if not chunks:
-        logger.error("No chunks extracted from the HTML file. Please check the file content.")
-    result = []
-    for i, chunk in enumerate(chunks):
-        logger.info(f"Processing chunk {i + 1}/{len(chunks)}")
-        products = extract_from_text_content(chunk)
-        result.extend(products)
-    print(result)
+    # chunks = preprocess_html_file(html_file_path=args.output_dir + "climbing.html", max_chunk_size=30000)
+    # logger.info(f"Number of chunks extracted: {len(chunks)}")
+    # if not chunks:
+    #     logger.error("No chunks extracted from the HTML file. Please check the file content.")
+    # result = []
+    # for i, chunk in enumerate(chunks):
+    #     logger.info(f"Processing chunk {i + 1}/{len(chunks)}")
+    #     products = extract_from_text_content(chunk)
+    #     result.extend(products)
+    # print(result)
 
     # result = extract_fields_from_file(file_path="data/results_scrapper/main_site.html")
     # result = get_next_sites_from_file(html_file_path=args.output_dir + "main_site.html", base_url=args.url)

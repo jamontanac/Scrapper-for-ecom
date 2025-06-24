@@ -48,9 +48,7 @@ def preprocess_html(html_file_path, max_chunk_size=4000):
 
 
 def extract_product_sections_with_bs4(html_content):
-    """
-    Alternative approach: Use BeautifulSoup directly to extract product sections
-    """
+    """Alternative approach: Use BeautifulSoup directly to extract product sections."""
     soup = BeautifulSoup(html_content, "html.parser")
 
     # Common selectors for product information
