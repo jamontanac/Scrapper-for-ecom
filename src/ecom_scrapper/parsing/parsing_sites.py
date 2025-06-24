@@ -1,14 +1,20 @@
 import argparse
 import pathlib
+import re
 from typing import Any, Dict, List, Optional, Type, Union
 
 import dotenv
-from langchain_core.language_models import BaseChatModel
 
 # from openai.types.chat import ChatCompletionMessageParam
+from langchain_community.document_loaders import BSHTMLLoader
+from langchain_community.document_transformers import BeautifulSoupTransformer
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field
 
 from ecom_scrapper.crawler.crawler import SimpleCrawler
@@ -36,35 +42,36 @@ class NavigationAgent(BaseModel):
     )
 
 
-class ExtractionMetadata(BaseModel):
-    """Metadata about the extraction process and results."""
+# Data Models
+class ProductData(BaseModel):
+    """Product information extracted from HTML"""
 
-    fields_found: List[str] = Field(
-        description="List of fields that were successfully found and extracted", default_factory=list
-    )
-    confidence_scores: Dict[str, float] = Field(
-        description="Confidence scores (0.0-1.0) for each extracted field", default_factory=dict
-    )
-    extraction_method: Dict[str, str] = Field(description="Method used to extract each field", default_factory=dict)
+    name: Optional[str] = Field(default=None, description="The product name or title")
+    price: Optional[str] = Field(default=None, description="The product price (e.g., '$29.95' or '$19.95 - $39.95')")
+    id: Optional[str] = Field(default=None, description="Product ID or SKU if available")
+    image_url: Optional[str] = Field(default=None, description="URL of the product image")
+    description: Optional[str] = Field(default=None, description="Product description or key features")
 
 
-class ExtractionAgent(BaseModel):
-    """Class with the expected output for extraction."""
+class ProductList(BaseModel):
+    """List of products extracted from HTML content"""
 
-    extracted_data: Dict[str, str] = Field(
-        description="Dictionary with the extracted data from the website."
-        "All values are strings, with empty strings for missing fields.",
-        default_factory=dict,
-    )
-    extraction_metadata: ExtractionMetadata = Field(
-        description="Comprehensive metadata about the extraction process"
-        "including success rates, methods used, and confidence scores"
-    )
+    products: List[ProductData] = Field(description="List of products found in the HTML content")
 
-    class config:  # pylint: disable= invalid-name
-        """extra configuration for Pydantic model."""
 
-        extra = "forbid"
+def create_extraction_chain(model_name: str, chunk: Any):
+    config = load_config_parsing()
+    prompt = config["system_prompt"]
+    llm_model = select_llm_model(model_name)
+    prompt_template = ChatPromptTemplate.from_template(template=prompt)
+    parser = PydanticOutputParser(pydantic_object=ProductList)
+    chain = prompt_template | llm_model | parser
+    try:
+        result = chain.invoke({"html_content": chunk[:3000], "format_instructions": parser.get_format_instructions()})
+        return result
+    except Exception as e:
+        print(f"Error processing with LLM: {e}")
+        return extract_from_text_content(chunk.page_content)
 
 
 def select_llm_model(model_name) -> BaseChatModel:
@@ -98,6 +105,79 @@ def create_structured_llm(llm_model: BaseChatModel, data_structure: Type[BaseMod
     return llm_model.with_structured_output(data_structure, method="function_calling")
 
 
+def preprocess_html_file(html_file_path: str, max_chunk_size: int = 3000) -> List[Any]:
+    """Preprocess HTML file to extract relevant product sections
+
+    Args:
+        html_file_path: Path to HTML file
+        max_chunk_size: Maximum size of each chunk
+
+    Returns:
+        List of document chunks containing product information
+    """
+    try:
+        # Load HTML using LangChain's BSHTMLLoader
+        loader = BSHTMLLoader(html_file_path)
+        documents = loader.load()
+        # Transform HTML to clean up unwanted elements
+        bs_transformer = BeautifulSoupTransformer()
+
+        cleaned_docs = bs_transformer.transform_documents(
+            documents,
+            tags_to_extract=["div", "span", "p", "h1", "h2", "h3", "h4", "img", "a", "li"],
+            unwanted_tags=["script", "style", "nav", "footer", "header"],
+            remove_lines=True,
+        )
+
+        # Split into manageable chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=max_chunk_size, chunk_overlap=200, separators=["\n\n", "\n", " ", ""]
+        )
+
+        chunks = text_splitter.split_documents(cleaned_docs)
+        # Filter chunks that likely contain product information
+        product_chunks = []
+        product_indicators = ["$", "price", "buy", "add to cart", ".95", ".99", "product", "item"]
+
+        for chunk in chunks:
+            content_lower = chunk.page_content.lower()
+            if any(indicator in content_lower for indicator in product_indicators):
+                product_chunks.append(chunk)
+        return product_chunks
+
+    except Exception as e:
+        print(f"Error preprocessing HTML file: {e}")
+        return []
+
+
+def extract_from_text_content(text_content: str) -> List[ProductData]:
+    """Extract products from raw text content (fallback method)
+
+    Args:
+        text_content: Raw text content from HTML
+
+    Returns:
+        List of ProductData objects
+    """
+    # Simple pattern matching for the specific format in the provided HTML
+    products = []
+
+    # Pattern: - ProductName$Price
+    pattern = r"-\s*(.+?)\$(\d+(?:\.\d{2})?(?:\s*-\s*\$\d+(?:\.\d{2})?)?)"
+    matches = re.findall(pattern, text_content)
+
+    for match in matches:
+        name = match[0].strip()
+        price = f"${match[1]}"
+
+        # Clean product name (remove special indicators)
+        name = re.sub(r"(Top Rated|Save \d+%)", "", name).strip()
+
+        products.append(ProductData(name=name, price=price, id=None, image_url=None, description=None))
+
+    return products
+
+
 def create_generic_message(content: str, role: str, message_type="ai") -> Union[AIMessage, HumanMessage, ToolMessage]:
     """Create a generic message with the given content, role, and type."""
     if message_type == "tool":
@@ -119,68 +199,6 @@ def load_config_parsing():
     config_file = pathlib.Path(get_project_root()).joinpath("config", "parsing_agent_config.yaml")
     config = read_yaml_file(config_file)
     return config
-
-
-def format_dicts(data, indent_level=0) -> str:
-    """Recursively format dictionaries and lists into a string with indentation."""
-    final_str = ""
-    if isinstance(data, dict):
-        for key, value in data.items():
-            final_str += "\t" * indent_level + key + "\n"
-            final_str += format_dicts(value, indent_level + 1)
-    elif isinstance(data, list):
-        for item in data:
-            final_str += format_dicts(item, indent_level)
-    else:
-        final_str += "\t" * indent_level + str(data) + "\n"
-    return final_str
-
-
-def format_and_send_messages_parsing(
-    resource_path: str,
-    model: str,
-    fields_to_extract: Optional[List[str]] = None,
-    config: Dict[str, Any] = load_config_parsing(),
-):
-    """Format the messages for the OpenAI chat completion request."""
-    if not fields_to_extract:
-        fields_to_extract = list(config["fields_to_extract"])
-    # str_interests = format_dicts(fields_to_extract)
-    str_fields = ", ".join(fields_to_extract)
-    # str_resources = ""
-    with open(resource_path, "r", encoding="utf-8") as file:
-        raw_html_content = file.read()
-    filter_engine = HTMLContentFilter(
-        target_fields=fields_to_extract,
-        max_tokens=20000,  # Adjust as needed
-    )
-
-    filtered_html = filter_engine.filter_html(raw_html_content)
-    llm_structured = create_structured_llm(select_llm_model(model), ExtractionAgent)
-    main_prompt = config["system_prompt"]
-    user_prompt = config["user_prompt"].format(fields=str_fields, web_resource=filtered_html)
-    messages_to_send = [
-        create_generic_message(main_prompt, role="system", message_type="ai"),
-        create_generic_message(user_prompt, role="user", message_type="user"),
-    ]
-    answer = llm_structured.invoke(messages_to_send)  # yield to process each chunk separately
-    return answer
-    # start the model
-
-
-#     ```python
-#     filter_instance = HTMLContentFilter(target_fields=['title', 'price'])
-#
-# # Get categorized URLs
-#     urls = filter_instance.extract_urls(html_content, 'https://example.com')
-#     print(f"Found {len(urls['links'])} links, {len(urls['images'])} images")
-#
-# # Get all URLs as a flat list
-#     all_urls = filter_instance.get_all_urls(html_content, 'https://example.com')
-#
-# # Get product-related URLs for e-commerce scraping
-#     product_urls = filter_instance.get_product_related_urls(html_content, 'https://example.com')
-#     ```
 
 
 def format_and_send_messages_navigation(
@@ -217,16 +235,6 @@ def format_and_send_messages_navigation(
     llm_structured = create_structured_llm(select_llm_model(model), NavigationAgent)
 
     answer = llm_structured.invoke(messages_to_send)
-    return answer
-
-
-def extract_fields_from_file(
-    file_path: str,
-    model: str = "gpt-4o",
-):
-    """Extract fields from a file using the OpenAI model."""
-    answer = format_and_send_messages_parsing(resource_path=file_path, model=model)
-
     return answer
 
 
@@ -310,18 +318,22 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     logger.info(f"Arguments: {args}")
-    # result =
-    # result = get_next_sites_from_sitemap(
-    #     url=args.url,
-    #     output_dir=args.output_dir,
-    #     model=args.model,
-    #     use_proxy=args.use_proxy,
-    #     proxy_file=args.proxy_file,
-    # )
+
+    chunks = preprocess_html_file(html_file_path=args.output_dir + "climbing.html", max_chunk_size=30000)
+    logger.info(f"Number of chunks extracted: {len(chunks)}")
+    if not chunks:
+        logger.error("No chunks extracted from the HTML file. Please check the file content.")
+    result = []
+    for i, chunk in enumerate(chunks):
+        logger.info(f"Processing chunk {i + 1}/{len(chunks)}")
+        products = extract_from_text_content(chunk)
+        result.extend(products)
+    print(result)
 
     # result = extract_fields_from_file(file_path="data/results_scrapper/main_site.html")
-    result = get_next_sites_from_file(html_file_path=args.output_dir + "main_site.html", base_url=args.url)
-    print(result)
+    # result = get_next_sites_from_file(html_file_path=args.output_dir + "main_site.html", base_url=args.url)
+    # result = extract_fields_from_file(file_path="data/results_scrapper/climbing.html")
+    # print(result)
 #     messages = format_messages(resources, interests)
 #     response = submit_request_to_openai(messages, model)
 #     if response:

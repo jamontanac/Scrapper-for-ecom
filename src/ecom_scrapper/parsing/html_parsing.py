@@ -4,8 +4,73 @@ from urllib.parse import urljoin, urlparse
 
 import tiktoken
 from bs4 import BeautifulSoup, Tag
+from langchain_community.document_loaders import BSHTMLLoader
+from langchain_community.document_transformers import BeautifulSoupTransformer
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from ecom_scrapper.utils import get_logger
+
+
+def preprocess_html(html_file_path, max_chunk_size=4000):
+    """Preprocess HTML file to extract relevant product sections."""
+    # Load HTML using LangChain's BSHTMLLoader
+    loader = BSHTMLLoader(html_file_path)
+    documents = loader.load()
+
+    # Transform HTML to clean up unwanted elements
+    bs_transformer = BeautifulSoupTransformer()
+
+    # Configure transformer to extract product-relevant tags
+    cleaned_docs = bs_transformer.transform_documents(
+        documents,
+        tags_to_extract=["div", "span", "p", "h1", "h2", "h3", "h4", "img", "a"],
+        unwanted_tags=["script", "style", "nav", "footer", "header"],
+        remove_lines=True,
+    )
+
+    # Split into manageable chunks
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=max_chunk_size, chunk_overlap=200, separators=["\n\n", "\n", " ", ""]
+    )
+
+    chunks = text_splitter.split_documents(cleaned_docs)
+
+    # Filter chunks that likely contain product information
+    product_chunks = []
+    product_indicators = ["$", "price", "buy", "add to cart", ".95", ".99", "product"]
+
+    for chunk in chunks:
+        content_lower = chunk.page_content.lower()
+        if any(indicator in content_lower for indicator in product_indicators):
+            product_chunks.append(chunk)
+
+    return product_chunks
+
+
+def extract_product_sections_with_bs4(html_content):
+    """
+    Alternative approach: Use BeautifulSoup directly to extract product sections
+    """
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # Common selectors for product information
+    product_selectors = [".product-item", ".product-card", ".product-tile", "[data-product-id]", ".search-result-item"]
+
+    products = []
+    for selector in product_selectors:
+        elements = soup.select(selector)
+        if elements:
+            products.extend(elements)
+            break
+
+    # If no specific selectors work, try to find patterns
+    if not products:
+        # Look for elements containing price patterns
+        price_pattern = re.compile(r"\$\d+\.\d{2}")
+        all_elements = soup.find_all(text=price_pattern)
+        products = [elem.parent for elem in all_elements if elem.parent]
+
+    return [str(product) for product in products[:50]]  # Limit to first 50 products
 
 
 class HTMLContentFilter:

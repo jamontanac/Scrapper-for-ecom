@@ -13,7 +13,8 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.11"
 pandas = "^2.2.3"
-numpy = ">=1.26.4,<2"
+numpy = ">=2.1.0"
+# numpy = ">=1.26.4,<2"
 colorlog = "^6.9.0"
 pyyaml = "^6.0.2"
 requests = "^2.32.4"
@@ -25,6 +26,7 @@ scrapy-rotating-proxies = "^0.6.2"
 openai = "^1.90.0"
 dotenv = "^0.9.9"
 langchain = "^0.3.26"
+langchain-community = "^0.3.26"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
